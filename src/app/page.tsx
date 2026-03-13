@@ -239,9 +239,7 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
           return (
             <div
               key={entry.name}
-              className={`grid grid-cols-12 px-3 sm:px-5 py-2 items-center ${
-                entry.isPoolPlayer ? "bg-green-50/60" : ""
-              } ${isMcWd ? "opacity-50" : ""}`}
+              className={`grid grid-cols-12 px-3 sm:px-5 py-2 items-center ${isMcWd ? "opacity-50" : ""}`}
             >
               <div className="col-span-1 text-center text-xs sm:text-sm font-medium tabular-nums text-gray-900">
                 {entry.position}
@@ -384,11 +382,6 @@ export default function Leaderboard() {
         {tab === "leaderboard" && (
           <>
             <LeaderboardTable entries={leaderboard} />
-            <div className="text-center mt-4">
-              <p className="text-xs text-gray-400">
-                Pool players highlighted in green
-              </p>
-            </div>
           </>
         )}
       </div>
