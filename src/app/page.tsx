@@ -38,11 +38,21 @@ type TeamDisplay = {
   tiebreaker: number;
 };
 
+type LeaderboardEntry = {
+  name: string;
+  position: string;
+  score: string;
+  today: string;
+  thru: string;
+  isPoolPlayer: boolean;
+};
+
 type APIResponse = {
   tournament: string;
   status: string;
   round?: number;
   teams: TeamDisplay[];
+  leaderboard?: LeaderboardEntry[];
   updatedAt: string;
 };
 
@@ -210,10 +220,56 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
   );
 }
 
+function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="grid grid-cols-12 px-3 sm:px-5 py-2.5 border-b border-gray-100 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">
+        <div className="col-span-1 text-center">Pos</div>
+        <div className="col-span-5 sm:col-span-5">Player</div>
+        <div className="col-span-3 text-center">Score</div>
+        <div className="col-span-3 text-center">Today</div>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {entries.map((entry) => {
+          const isMcWd = entry.position === "MC" || entry.position === "WD";
+          const thruDisplay = entry.thru !== "--" && entry.thru !== "F"
+            ? `(${entry.thru})`
+            : entry.thru === "F" ? "(F)" : "";
+          return (
+            <div
+              key={entry.name}
+              className={`grid grid-cols-12 px-3 sm:px-5 py-2 items-center ${
+                entry.isPoolPlayer ? "bg-green-50/60" : ""
+              } ${isMcWd ? "opacity-50" : ""}`}
+            >
+              <div className={`col-span-1 text-center text-xs sm:text-sm font-medium tabular-nums ${getPositionStyle(entry.position)}`}>
+                {entry.position}
+              </div>
+              <div className={`col-span-5 sm:col-span-5 text-xs sm:text-sm truncate ${
+                entry.isPoolPlayer ? "font-semibold text-gray-900" : "text-gray-700"
+              }`}>
+                {entry.name}
+              </div>
+              <div className={`col-span-3 text-center text-xs sm:text-sm font-medium tabular-nums ${getScoreStyle(entry.score)}`}>
+                {entry.score}
+              </div>
+              <div className={`col-span-3 text-center text-xs sm:text-sm tabular-nums ${getScoreStyle(entry.today)}`}>
+                {entry.today !== "--" ? `${entry.today} ${thruDisplay}` : "--"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ───────────────────────────────────────────────────────
 
 export default function Leaderboard() {
+  const [tab, setTab] = useState<"pool" | "leaderboard">("pool");
   const [teams, setTeams] = useState<TeamDisplay[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [tournamentStatus, setTournamentStatus] = useState(
     "Waiting for tournament to start"
   );
@@ -227,6 +283,7 @@ export default function Leaderboard() {
       if (!res.ok) throw new Error("API error");
       const data: APIResponse = await res.json();
       setTeams(data.teams);
+      setLeaderboard(data.leaderboard || []);
       setTournamentStatus(data.status);
       setCurrentRound(data.round || null);
       setLastUpdated(data.updatedAt);
@@ -281,20 +338,58 @@ export default function Leaderboard() {
           isLive={teams.some((t) => t.players.some((p) => p.thru !== "--" && p.thru !== "F"))}
         />
 
-        {/* Standings */}
-        <div className="space-y-4">
-          {teams.map((team, i) => (
-            <TeamCard key={team.id} team={team} rank={i + 1} />
-          ))}
+        {/* Tabs */}
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6">
+          <button
+            onClick={() => setTab("pool")}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              tab === "pool"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Pool
+          </button>
+          <button
+            onClick={() => setTab("leaderboard")}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              tab === "leaderboard"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Leaderboard
+          </button>
         </div>
 
-        {/* Footer */}
-        <div className="text-center mt-8">
-          <p className="text-xs text-gray-400">
-            Points = sum of player positions (lower is better) &middot; Updates
-            every 5 min
-          </p>
-        </div>
+        {/* Pool view */}
+        {tab === "pool" && (
+          <>
+            <div className="space-y-4">
+              {teams.map((team, i) => (
+                <TeamCard key={team.id} team={team} rank={i + 1} />
+              ))}
+            </div>
+            <div className="text-center mt-8">
+              <p className="text-xs text-gray-400">
+                Points = sum of player positions (lower is better) &middot; Updates
+                every 5 min
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* Leaderboard view */}
+        {tab === "leaderboard" && (
+          <>
+            <LeaderboardTable entries={leaderboard} />
+            <div className="text-center mt-4">
+              <p className="text-xs text-gray-400">
+                Pool players highlighted in green
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

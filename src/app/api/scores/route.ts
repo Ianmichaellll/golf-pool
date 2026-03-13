@@ -301,11 +301,28 @@ export async function GET() {
       competition.status?.type?.description ||
       "In Progress";
 
+    // Build full leaderboard for all competitors
+    const leaderboard = competitors.map((c) => {
+      const pos = positionMap.get(c.athlete.displayName.toLowerCase()) || "--";
+      const thru = getThru(c, currentRound);
+      const today = getTodayScore(c, currentRound);
+      const isPoolPlayer = findPoolMatch(c.athlete.displayName) !== null;
+      return {
+        name: c.athlete.displayName,
+        position: pos,
+        score: c.score || "E",
+        today,
+        thru,
+        isPoolPlayer,
+      };
+    });
+
     const result = {
       tournament: event.name,
       status: eventStatus,
       round: currentRound,
       teams,
+      leaderboard,
       updatedAt: new Date().toISOString(),
     };
 
