@@ -6,10 +6,9 @@ import { POOL_DATA } from "./lib/pool-data";
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function getPositionStyle(pos: string): string {
-  if (pos === "1") return "text-green-700 font-semibold";
   if (pos === "WD" || pos === "MC" || pos === "DQ") return "text-red-500";
-  if (pos.startsWith("T") && parseInt(pos.replace("T", "")) <= 10)
-    return "text-green-700";
+  const num = parseInt(pos.replace("T", ""));
+  if (!isNaN(num) && num <= 10) return "text-green-700";
   return "text-gray-700";
 }
 
