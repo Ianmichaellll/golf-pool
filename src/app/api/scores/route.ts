@@ -1,0 +1,259 @@
+import { NextResponse } from "next/server";
+import { POOL_DATA } from "../../lib/pool-data";
+
+const ESPN_URL =
+  "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard";
+
+// Cache for 2 minutes to avoid hammering ESPN
+let cache: { data: unknown; ts: number } | null = null;
+const CACHE_TTL = 2 * 60 * 1000;
+
+type ESPNHole = {
+  period: number;
+  value: number;
+  displayValue: string;
+};
+
+type ESPNLinescore = {
+  period: number;
+  value: number;
+  displayValue: string;
+  linescores?: ESPNHole[];
+};
+
+type ESPNCompetitor = {
+  order: number;
+  score: string;
+  athlete: {
+    displayName: string;
+    fullName: string;
+    shortName: string;
+  };
+  linescores?: ESPNLinescore[];
+  status?: {
+    displayValue?: string;
+    type?: { description?: string };
+  };
+};
+
+type ESPNEvent = {
+  name: string;
+  shortName: string;
+  competitions: {
+    competitors: ESPNCompetitor[];
+    status?: {
+      type?: { description?: string; state?: string };
+    };
+  }[];
+  status?: {
+    type?: { description?: string; state?: string };
+  };
+};
+
+type ESPNResponse = {
+  events: ESPNEvent[];
+};
+
+// Build a set of all pool player names (lowercased) for matching
+const POOL_PLAYERS = new Set(
+  POOL_DATA.teams.flatMap((t) => t.players.map((p) => p.toLowerCase()))
+);
+
+function normalizeForMatch(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[.\-']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findPoolMatch(espnName: string): string | null {
+  const normalized = normalizeForMatch(espnName);
+  for (const poolPlayer of POOL_PLAYERS) {
+    if (normalizeForMatch(poolPlayer) === normalized) {
+      return poolPlayer;
+    }
+  }
+  // Try last-name matching as fallback
+  const espnLast = normalized.split(" ").pop() || "";
+  for (const poolPlayer of POOL_PLAYERS) {
+    const poolLast = normalizeForMatch(poolPlayer).split(" ").pop() || "";
+    if (espnLast === poolLast && espnLast.length > 2) {
+      return poolPlayer;
+    }
+  }
+  return null;
+}
+
+function getThru(competitor: ESPNCompetitor): string {
+  if (!competitor.linescores || competitor.linescores.length === 0) return "--";
+  // Get the latest round's hole-by-hole data
+  const latestRound = competitor.linescores[competitor.linescores.length - 1];
+  if (!latestRound.linescores || latestRound.linescores.length === 0)
+    return "--";
+  const holesPlayed = latestRound.linescores.length;
+  return holesPlayed >= 18 ? "F" : String(holesPlayed);
+}
+
+function getTodayScore(competitor: ESPNCompetitor): string {
+  if (!competitor.linescores || competitor.linescores.length === 0) return "--";
+  const latestRound = competitor.linescores[competitor.linescores.length - 1];
+  return latestRound.displayValue || "--";
+}
+
+function computePosition(
+  competitors: ESPNCompetitor[]
+): Map<string, string> {
+  const positions = new Map<string, string>();
+  let rank = 1;
+  let i = 0;
+
+  while (i < competitors.length) {
+    const currentScore = competitors[i].score;
+    // Count how many share this score
+    let tied = 0;
+    while (
+      i + tied < competitors.length &&
+      competitors[i + tied].score === currentScore
+    ) {
+      tied++;
+    }
+
+    for (let j = 0; j < tied; j++) {
+      const name = competitors[i + j].athlete.displayName;
+      const pos = tied > 1 ? `T${rank}` : String(rank);
+      positions.set(name.toLowerCase(), pos);
+    }
+
+    rank += tied;
+    i += tied;
+  }
+
+  return positions;
+}
+
+export async function GET() {
+  // Return cache if fresh
+  if (cache && Date.now() - cache.ts < CACHE_TTL) {
+    return NextResponse.json(cache.data, {
+      headers: { "Cache-Control": "public, max-age=120" },
+    });
+  }
+
+  try {
+    const res = await fetch(ESPN_URL, {
+      headers: { "User-Agent": "GolfPool/1.0" },
+      next: { revalidate: 120 },
+    });
+
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: "ESPN API unavailable" },
+        { status: 502 }
+      );
+    }
+
+    const data: ESPNResponse = await res.json();
+    const event = data.events?.[0];
+    if (!event || !event.competitions?.[0]) {
+      return NextResponse.json(
+        { error: "No active event" },
+        { status: 404 }
+      );
+    }
+
+    const competition = event.competitions[0];
+    const competitors = competition.competitors || [];
+    const positionMap = computePosition(competitors);
+
+    // Build player score map
+    const playerScores: Record<
+      string,
+      { position: string; score: string; thru: string; today: string }
+    > = {};
+
+    for (const c of competitors) {
+      const match = findPoolMatch(c.athlete.displayName);
+      if (match) {
+        playerScores[match] = {
+          position: positionMap.get(c.athlete.displayName.toLowerCase()) || "--",
+          score: c.score || "E",
+          thru: getThru(c),
+          today: getTodayScore(c),
+        };
+      }
+    }
+
+    // Build team results
+    const teams = POOL_DATA.teams.map((team) => {
+      const players = team.players.map((name) => {
+        const scores = playerScores[name.toLowerCase()];
+        return {
+          name,
+          position: scores?.position || "--",
+          score: scores?.score || "--",
+          thru: scores?.thru || "--",
+          today: scores?.today || "--",
+          isActive: scores?.position !== "WD" && scores?.position !== "DQ",
+        };
+      });
+
+      // Total points = sum of numeric positions (lower is better)
+      let totalPoints = 0;
+      let tiebreaker = 0;
+      for (const p of players) {
+        const posNum = parseInt(p.position.replace("T", ""));
+        if (!isNaN(posNum)) {
+          totalPoints += posNum;
+        } else if (p.position === "MC") {
+          totalPoints += 999;
+        } else if (p.position === "WD" || p.position === "DQ") {
+          totalPoints += 999;
+        }
+        // Tiebreaker: sum of scores relative to par
+        const scoreNum = parseInt(p.score.replace("E", "0"));
+        if (!isNaN(scoreNum)) {
+          tiebreaker += scoreNum;
+        }
+      }
+
+      return {
+        id: team.id,
+        owner: team.owner,
+        players,
+        totalPoints,
+        tiebreaker,
+      };
+    });
+
+    // Sort teams
+    teams.sort((a, b) => {
+      if (a.totalPoints !== b.totalPoints) return a.totalPoints - b.totalPoints;
+      return a.tiebreaker - b.tiebreaker;
+    });
+
+    const eventStatus =
+      event.status?.type?.description ||
+      competition.status?.type?.description ||
+      "In Progress";
+
+    const result = {
+      tournament: event.name,
+      status: eventStatus,
+      teams,
+      updatedAt: new Date().toISOString(),
+    };
+
+    cache = { data: result, ts: Date.now() };
+
+    return NextResponse.json(result, {
+      headers: { "Cache-Control": "public, max-age=120" },
+    });
+  } catch (err) {
+    console.error("ESPN fetch error:", err);
+    return NextResponse.json(
+      { error: "Failed to fetch scores" },
+      { status: 500 }
+    );
+  }
+}

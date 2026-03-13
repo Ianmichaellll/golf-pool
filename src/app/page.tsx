@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { POOL_DATA } from "./lib/pool-data";
-import type { PoolConfig } from "./lib/types";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -39,9 +38,24 @@ type TeamDisplay = {
   tiebreaker: number;
 };
 
+type APIResponse = {
+  tournament: string;
+  status: string;
+  teams: TeamDisplay[];
+  updatedAt: string;
+};
+
 // ── Components ──────────────────────────────────────────────────────
 
-function TournamentHeader({ name, status }: { name: string; status: string }) {
+function TournamentHeader({
+  name,
+  status,
+  lastUpdated,
+}: {
+  name: string;
+  status: string;
+  lastUpdated: string | null;
+}) {
   return (
     <div className="text-center mb-8">
       <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
@@ -55,6 +69,11 @@ function TournamentHeader({ name, status }: { name: string; status: string }) {
         </span>
         <span className="text-gray-600">{status}</span>
       </div>
+      {lastUpdated && (
+        <div className="text-xs text-gray-400 mt-2">
+          Updated {new Date(lastUpdated).toLocaleTimeString()}
+        </div>
+      )}
     </div>
   );
 }
@@ -172,64 +191,76 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
   );
 }
 
-// ── Build display teams from config ─────────────────────────────────
-
-function buildDisplayTeams(config: PoolConfig): TeamDisplay[] {
-  return config.teams.map((t) => {
-    const players: PlayerDisplay[] = t.players.map((name) => ({
-      name,
-      position: "--",
-      score: "--",
-      thru: "--",
-      today: "--",
-      isActive: true,
-    }));
-
-    return {
-      id: t.id,
-      owner: t.owner,
-      players,
-      totalPoints: 0,
-      tiebreaker: 0,
-    };
-  });
-}
-
 // ── Main Page ───────────────────────────────────────────────────────
 
 export default function Leaderboard() {
   const [teams, setTeams] = useState<TeamDisplay[]>([]);
+  const [tournamentStatus, setTournamentStatus] = useState(
+    "Waiting for tournament to start"
+  );
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
+  const fetchScores = useCallback(async () => {
+    try {
+      const res = await fetch("/api/scores");
+      if (!res.ok) throw new Error("API error");
+      const data: APIResponse = await res.json();
+      setTeams(data.teams);
+      setTournamentStatus(data.status);
+      setLastUpdated(data.updatedAt);
+      setLoaded(true);
+    } catch {
+      // If API fails, show hardcoded data as fallback
+      if (!loaded) {
+        setTeams(
+          POOL_DATA.teams.map((t) => ({
+            id: t.id,
+            owner: t.owner,
+            players: t.players.map((name) => ({
+              name,
+              position: "--",
+              score: "--",
+              thru: "--",
+              today: "--",
+              isActive: true,
+            })),
+            totalPoints: 0,
+            tiebreaker: 0,
+          }))
+        );
+        setLoaded(true);
+      }
+    }
+  }, [loaded]);
+
   useEffect(() => {
-    setTeams(buildDisplayTeams(POOL_DATA));
-    setLoaded(true);
-  }, []);
+    fetchScores();
+    // Poll every 5 minutes
+    const interval = setInterval(fetchScores, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchScores]);
 
   if (!loaded) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
+        <p className="text-gray-400">Loading scores...</p>
       </div>
     );
   }
-
-  const sortedTeams = [...teams].sort((a, b) => {
-    if (a.totalPoints !== b.totalPoints) return a.totalPoints - b.totalPoints;
-    return a.tiebreaker - b.tiebreaker;
-  });
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-4 py-8">
         <TournamentHeader
           name={POOL_DATA.tournamentName}
-          status="Waiting for tournament to start"
+          status={tournamentStatus}
+          lastUpdated={lastUpdated}
         />
 
         {/* Standings */}
         <div className="space-y-4">
-          {sortedTeams.map((team, i) => (
+          {teams.map((team, i) => (
             <TeamCard key={team.id} team={team} rank={i + 1} />
           ))}
         </div>
@@ -237,7 +268,8 @@ export default function Leaderboard() {
         {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-xs text-gray-400">
-            Points = sum of player positions (lower is better)
+            Points = sum of player positions (lower is better) &middot; Updates
+            every 5 min
           </p>
         </div>
       </div>
