@@ -87,20 +87,29 @@ function findPoolMatch(espnName: string): string | null {
   return null;
 }
 
+function getCurrentRound(competitor: ESPNCompetitor): ESPNLinescore | null {
+  if (!competitor.linescores || competitor.linescores.length === 0) return null;
+  // Find the latest round that has actual hole data (skip empty placeholders)
+  for (let i = competitor.linescores.length - 1; i >= 0; i--) {
+    const round = competitor.linescores[i];
+    if (round.linescores && round.linescores.length > 0) {
+      return round;
+    }
+  }
+  return null;
+}
+
 function getThru(competitor: ESPNCompetitor): string {
-  if (!competitor.linescores || competitor.linescores.length === 0) return "--";
-  // Get the latest round's hole-by-hole data
-  const latestRound = competitor.linescores[competitor.linescores.length - 1];
-  if (!latestRound.linescores || latestRound.linescores.length === 0)
-    return "--";
-  const holesPlayed = latestRound.linescores.length;
+  const round = getCurrentRound(competitor);
+  if (!round) return "--";
+  const holesPlayed = round.linescores!.length;
   return holesPlayed >= 18 ? "F" : String(holesPlayed);
 }
 
 function getTodayScore(competitor: ESPNCompetitor): string {
-  if (!competitor.linescores || competitor.linescores.length === 0) return "--";
-  const latestRound = competitor.linescores[competitor.linescores.length - 1];
-  return latestRound.displayValue || "--";
+  const round = getCurrentRound(competitor);
+  if (!round) return "--";
+  return round.displayValue || "--";
 }
 
 function isMissedCut(competitor: ESPNCompetitor): boolean {
