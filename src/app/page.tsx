@@ -250,10 +250,11 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
               <div className="col-span-3 text-center text-xs sm:text-sm font-medium tabular-nums text-gray-900">
                 {entry.score}
               </div>
-              <div className={`col-span-3 text-center text-xs sm:text-sm tabular-nums ${
-                entry.today.startsWith("-") ? "text-red-600 font-medium" : "text-gray-900"
-              }`}>
-                {entry.today !== "--" ? `${entry.today} ${thruDisplay}` : "--"}
+              <div className="col-span-3 text-center text-xs sm:text-sm tabular-nums text-gray-900">
+                <span className={entry.today.startsWith("-") ? "text-red-600" : ""}>
+                  {entry.today}
+                </span>
+                {thruDisplay && <span className="ml-1 text-gray-400">{thruDisplay}</span>}
               </div>
             </div>
           );
