@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { loadPool, savePool } from "../lib/storage";
 
-const PLAYERS_PER_TEAM = 5; // 4 starters + 1 alternate
+const PLAYERS_PER_TEAM = 4;
 
 export default function Draft() {
   const router = useRouter();
@@ -92,7 +92,7 @@ export default function Draft() {
           {pool?.tournamentName}
         </p>
         <p className="text-gray-400 text-xs text-center mb-8">
-          5 players per team (4 starters + 1 alternate). Player 5 is the alternate.
+          4 players per team
         </p>
 
         <div className="space-y-6">
@@ -120,16 +120,11 @@ export default function Draft() {
                     const isDuplicate =
                       player.trim() &&
                       getAllPicked(team.id, i).has(player.trim().toLowerCase());
-                    const isAlt = i === PLAYERS_PER_TEAM - 1;
 
                     return (
                       <div key={i} className="flex items-center gap-2">
-                        <span
-                          className={`w-6 text-xs text-right shrink-0 ${
-                            isAlt ? "text-amber-500" : "text-gray-400"
-                          }`}
-                        >
-                          {isAlt ? "ALT" : `${i + 1}.`}
+                        <span className="w-6 text-xs text-right shrink-0 text-gray-400">
+                          {i + 1}.
                         </span>
                         <input
                           type="text"
@@ -137,16 +132,10 @@ export default function Draft() {
                           onChange={(e) =>
                             updatePick(team.id, i, e.target.value)
                           }
-                          placeholder={
-                            isAlt
-                              ? "Alternate player"
-                              : `Player ${i + 1}`
-                          }
+                          placeholder={`Player ${i + 1}`}
                           className={`flex-1 px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${
                             isDuplicate
                               ? "border-red-300 bg-red-50 text-red-700 focus:ring-red-200 focus:border-red-400"
-                              : isAlt
-                              ? "border-amber-200 bg-amber-50/50 text-gray-900 focus:ring-amber-200 focus:border-amber-400"
                               : "border-gray-200 bg-white text-gray-900 focus:ring-green-600/20 focus:border-green-600"
                           }`}
                         />

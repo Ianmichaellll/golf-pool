@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { loadPool } from "./lib/storage";
+import { POOL_DATA } from "./lib/pool-data";
 import type { PoolConfig } from "./lib/types";
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -29,7 +28,6 @@ type PlayerDisplay = {
   score: string;
   thru: string;
   today: string;
-  isBackup: boolean;
   isActive: boolean;
 };
 
@@ -62,9 +60,8 @@ function TournamentHeader({ name, status }: { name: string; status: string }) {
 }
 
 function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
-  const activePlayers = team.players.filter((p) => p.isActive && !p.isBackup);
-  const backupPlayer = team.players.find((p) => p.isBackup);
-  const wdPlayers = team.players.filter((p) => !p.isActive && !p.isBackup);
+  const activePlayers = team.players.filter((p) => p.isActive);
+  const wdPlayers = team.players.filter((p) => !p.isActive);
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -170,52 +167,21 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
             </div>
           </div>
         ))}
-
-        {backupPlayer && (
-          <div className="grid grid-cols-12 px-5 py-2.5 items-center bg-gray-50/80">
-            <div className="col-span-5 text-sm text-gray-400 truncate">
-              <span className="text-[10px] uppercase tracking-wide bg-gray-200 text-gray-500 rounded px-1.5 py-0.5 mr-2">
-                ALT
-              </span>
-              {backupPlayer.name}
-            </div>
-            <div
-              className={`col-span-2 text-center text-sm tabular-nums ${
-                backupPlayer.position === "MC"
-                  ? "text-red-400"
-                  : "text-gray-400"
-              }`}
-            >
-              {backupPlayer.position}
-            </div>
-            <div className="col-span-2 text-center text-sm text-gray-400 tabular-nums">
-              {backupPlayer.score}
-            </div>
-            <div className="col-span-1 text-center text-sm text-gray-400 tabular-nums">
-              {backupPlayer.thru}
-            </div>
-            <div className="col-span-2 text-center text-sm text-gray-400 tabular-nums">
-              {backupPlayer.today}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
-// ── Build display teams from saved config ───────────────────────────
-// For now, positions/scores are placeholder until we wire up the API
+// ── Build display teams from config ─────────────────────────────────
 
 function buildDisplayTeams(config: PoolConfig): TeamDisplay[] {
   return config.teams.map((t) => {
-    const players: PlayerDisplay[] = t.players.map((name, i) => ({
+    const players: PlayerDisplay[] = t.players.map((name) => ({
       name,
       position: "--",
       score: "--",
       thru: "--",
       today: "--",
-      isBackup: i === t.players.length - 1,
       isActive: true,
     }));
 
@@ -232,21 +198,13 @@ function buildDisplayTeams(config: PoolConfig): TeamDisplay[] {
 // ── Main Page ───────────────────────────────────────────────────────
 
 export default function Leaderboard() {
-  const router = useRouter();
-  const [pool, setPool] = useState<PoolConfig | null>(null);
   const [teams, setTeams] = useState<TeamDisplay[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const config = loadPool();
-    if (!config || config.teams.length === 0) {
-      router.push("/setup");
-      return;
-    }
-    setPool(config);
-    setTeams(buildDisplayTeams(config));
+    setTeams(buildDisplayTeams(POOL_DATA));
     setLoaded(true);
-  }, [router]);
+  }, []);
 
   if (!loaded) {
     return (
@@ -265,7 +223,7 @@ export default function Leaderboard() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-4 py-8">
         <TournamentHeader
-          name={pool?.tournamentName ?? ""}
+          name={POOL_DATA.tournamentName}
           status="Waiting for tournament to start"
         />
 
@@ -277,24 +235,10 @@ export default function Leaderboard() {
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-8 space-y-3">
+        <div className="text-center mt-8">
           <p className="text-xs text-gray-400">
             Points = sum of player positions (lower is better)
           </p>
-          <div className="flex justify-center gap-4">
-            <button
-              onClick={() => router.push("/setup")}
-              className="text-sm text-gray-400 hover:text-gray-600 transition"
-            >
-              Edit teams
-            </button>
-            <button
-              onClick={() => router.push("/draft")}
-              className="text-sm text-gray-400 hover:text-gray-600 transition"
-            >
-              Edit picks
-            </button>
-          </div>
         </div>
       </div>
     </div>
