@@ -103,26 +103,57 @@ function getTodayScore(competitor: ESPNCompetitor): string {
   return latestRound.displayValue || "--";
 }
 
+function isMissedCut(competitor: ESPNCompetitor): boolean {
+  // ESPN marks MC players with status or by having only 2 rounds
+  // and being sorted to the bottom with no more rounds to play
+  const statusDesc = competitor.status?.type?.description?.toLowerCase() || "";
+  if (statusDesc.includes("cut") || statusDesc === "mc") return true;
+  // Also check if score field contains "CUT" or similar
+  if (competitor.score === "CUT" || competitor.score === "MC") return true;
+  return false;
+}
+
+function isWithdrawn(competitor: ESPNCompetitor): boolean {
+  const statusDesc = competitor.status?.type?.description?.toLowerCase() || "";
+  return statusDesc === "wd" || statusDesc === "withdrawn" ||
+    competitor.score === "WD";
+}
+
 function computePosition(
   competitors: ESPNCompetitor[]
 ): Map<string, string> {
   const positions = new Map<string, string>();
+
+  // Separate active players from MC/WD
+  const active: ESPNCompetitor[] = [];
+  const inactive: ESPNCompetitor[] = [];
+
+  for (const c of competitors) {
+    if (isMissedCut(c)) {
+      positions.set(c.athlete.displayName.toLowerCase(), "MC");
+    } else if (isWithdrawn(c)) {
+      positions.set(c.athlete.displayName.toLowerCase(), "WD");
+    } else {
+      active.push(c);
+    }
+  }
+
+  // Rank active players
   let rank = 1;
   let i = 0;
 
-  while (i < competitors.length) {
-    const currentScore = competitors[i].score;
-    // Count how many share this score
+  while (i < active.length) {
+    const currentScore = active[i].score;
     let tied = 0;
     while (
-      i + tied < competitors.length &&
-      competitors[i + tied].score === currentScore
+      i + tied < active.length &&
+      active[i + tied].score === currentScore
     ) {
       tied++;
     }
 
     for (let j = 0; j < tied; j++) {
-      const name = competitors[i + j].athlete.displayName;
+      const name = active[i + j].athlete.displayName;
       const pos = tied > 1 ? `T${rank}` : String(rank);
       positions.set(name.toLowerCase(), pos);
     }
@@ -196,7 +227,7 @@ export async function GET() {
           score: scores?.score || "--",
           thru: scores?.thru || "--",
           today: scores?.today || "--",
-          isActive: scores?.position !== "WD" && scores?.position !== "DQ",
+          isActive: scores?.position !== "WD" && scores?.position !== "DQ" && scores?.position !== "MC",
         };
       });
 

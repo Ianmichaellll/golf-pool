@@ -119,41 +119,41 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
 
       {/* Players table */}
       <div className="divide-y divide-gray-50">
-        <div className="grid grid-cols-10 sm:grid-cols-12 px-4 sm:px-5 py-2 text-xs text-gray-400 uppercase tracking-wide">
-          <div className="col-span-4 sm:col-span-5">Player</div>
+        <div className="grid grid-cols-12 px-3 sm:px-5 py-2 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">
+          <div className="col-span-4">Player</div>
           <div className="col-span-2 text-center">Pos</div>
           <div className="col-span-2 text-center">Score</div>
-          <div className="hidden sm:block sm:col-span-1 text-center">Thru</div>
+          <div className="col-span-2 text-center">Thru</div>
           <div className="col-span-2 text-center">Today</div>
         </div>
 
         {activePlayers.map((player) => (
           <div
             key={player.name}
-            className="grid grid-cols-10 sm:grid-cols-12 px-4 sm:px-5 py-2.5 items-center hover:bg-gray-50 transition-colors"
+            className="grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center hover:bg-gray-50 transition-colors"
           >
-            <div className="col-span-4 sm:col-span-5 text-sm font-medium text-gray-800 truncate">
+            <div className="col-span-4 text-xs sm:text-sm font-medium text-gray-800 truncate">
               {player.name}
             </div>
             <div
-              className={`col-span-2 text-center text-sm font-medium tabular-nums ${getPositionStyle(
+              className={`col-span-2 text-center text-xs sm:text-sm font-medium tabular-nums ${getPositionStyle(
                 player.position
               )}`}
             >
               {player.position}
             </div>
             <div
-              className={`col-span-2 text-center text-sm font-medium tabular-nums ${getScoreStyle(
+              className={`col-span-2 text-center text-xs sm:text-sm font-medium tabular-nums ${getScoreStyle(
                 player.score
               )}`}
             >
               {player.score}
             </div>
-            <div className="hidden sm:block sm:col-span-1 text-center text-sm text-gray-500 tabular-nums">
+            <div className="col-span-2 text-center text-xs sm:text-sm text-gray-500 tabular-nums">
               {player.thru}
             </div>
             <div
-              className={`col-span-2 text-center text-sm tabular-nums ${getScoreStyle(
+              className={`col-span-2 text-center text-xs sm:text-sm tabular-nums ${getScoreStyle(
                 player.today
               )}`}
             >
@@ -165,21 +165,21 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
         {wdPlayers.map((player) => (
           <div
             key={player.name}
-            className="grid grid-cols-10 sm:grid-cols-12 px-4 sm:px-5 py-2.5 items-center bg-red-50/50"
+            className="grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center bg-red-50/50"
           >
-            <div className="col-span-4 sm:col-span-5 text-sm text-gray-400 line-through truncate">
+            <div className="col-span-4 text-xs sm:text-sm text-gray-400 line-through truncate">
               {player.name}
             </div>
-            <div className="col-span-2 text-center text-sm font-medium text-red-500">
+            <div className="col-span-2 text-center text-xs sm:text-sm font-medium text-red-500">
               {player.position}
             </div>
-            <div className="col-span-2 text-center text-sm text-gray-400">
+            <div className="col-span-2 text-center text-xs sm:text-sm text-gray-400">
               {player.score}
             </div>
-            <div className="hidden sm:block sm:col-span-1 text-center text-sm text-gray-400">
+            <div className="col-span-2 text-center text-xs sm:text-sm text-gray-400">
               {player.thru}
             </div>
-            <div className="col-span-2 text-center text-sm text-gray-400">
+            <div className="col-span-2 text-center text-xs sm:text-sm text-gray-400">
               {player.today}
             </div>
           </div>
