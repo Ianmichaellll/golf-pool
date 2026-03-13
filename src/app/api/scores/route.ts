@@ -61,6 +61,8 @@ const POOL_PLAYERS = new Set(
 
 function normalizeForMatch(name: string): string {
   return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents (å→a, é→e, etc.)
     .toLowerCase()
     .replace(/[.\-']/g, "")
     .replace(/\s+/g, " ")

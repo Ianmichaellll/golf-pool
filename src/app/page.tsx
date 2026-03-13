@@ -87,17 +87,7 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
       {/* Team header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <div className="flex items-center gap-3">
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-              rank === 1
-                ? "bg-green-700 text-white"
-                : rank === 2
-                ? "bg-gray-200 text-gray-700"
-                : rank === 3
-                ? "bg-amber-100 text-amber-800"
-                : "bg-gray-100 text-gray-500"
-            }`}
-          >
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-gray-100 text-gray-500">
             {rank}
           </div>
           <div>
