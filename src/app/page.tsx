@@ -87,7 +87,7 @@ function TournamentHeader({
 }
 
 function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const activePlayers = team.players.filter((p) => p.isActive);
   const wdPlayers = team.players.filter((p) => !p.isActive);
 
