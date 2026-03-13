@@ -202,7 +202,7 @@ export async function GET() {
     // Build player score map
     const playerScores: Record<
       string,
-      { position: string; score: string; thru: string; today: string }
+      { position: string; score: string; thru: string; today: string; order: number }
     > = {};
 
     for (const c of competitors) {
@@ -213,6 +213,7 @@ export async function GET() {
           score: c.score || "E",
           thru: getThru(c),
           today: getTodayScore(c),
+          order: c.order,
         };
       }
     }
@@ -232,16 +233,17 @@ export async function GET() {
       });
 
       // Total points = sum of numeric positions (lower is better)
+      // MC/WD players use their ESPN order (actual finishing position)
       let totalPoints = 0;
       let tiebreaker = 0;
       for (const p of players) {
         const posNum = parseInt(p.position.replace("T", ""));
         if (!isNaN(posNum)) {
           totalPoints += posNum;
-        } else if (p.position === "MC") {
-          totalPoints += 999;
-        } else if (p.position === "WD" || p.position === "DQ") {
-          totalPoints += 999;
+        } else {
+          // MC, WD, DQ — use their order from ESPN as their position
+          const scores = playerScores[p.name.toLowerCase()];
+          totalPoints += scores?.order || 999;
         }
         // Tiebreaker: sum of scores relative to par
         const scoreNum = parseInt(p.score.replace("E", "0"));

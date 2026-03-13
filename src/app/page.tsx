@@ -87,38 +87,53 @@ function TournamentHeader({
 }
 
 function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
+  const [open, setOpen] = useState(true);
   const activePlayers = team.players.filter((p) => p.isActive);
   const wdPlayers = team.players.filter((p) => !p.isActive);
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      {/* Team header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      {/* Team header — tap to toggle */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-5 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+      >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-gray-100 text-gray-500">
             {rank}
           </div>
-          <div>
+          <div className="text-left">
             <div className="font-semibold text-gray-900">{team.owner}</div>
             <div className="text-xs text-gray-400">
               {activePlayers.length} active players
             </div>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-gray-900 tabular-nums">
-            {team.totalPoints}
-            <span className="text-xs font-normal text-gray-400 ml-1">pts</span>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-2xl font-bold text-gray-900 tabular-nums">
+              {team.totalPoints}
+              <span className="text-xs font-normal text-gray-400 ml-1">pts</span>
+            </div>
+            <div className="text-xs text-gray-400 tabular-nums">
+              Tiebreak: {team.tiebreaker > 0 ? "+" : ""}
+              {team.tiebreaker}
+            </div>
           </div>
-          <div className="text-xs text-gray-400 tabular-nums">
-            Tiebreak: {team.tiebreaker > 0 ? "+" : ""}
-            {team.tiebreaker}
-          </div>
+          <svg
+            className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
-      </div>
+      </button>
 
       {/* Players table */}
-      <div className="divide-y divide-gray-50">
+      {open && <div className="divide-y divide-gray-50">
         <div className="grid grid-cols-12 px-3 sm:px-5 py-2 text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">
           <div className="col-span-4">Player</div>
           <div className="col-span-2 text-center">Pos</div>
@@ -184,7 +199,7 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
             </div>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
