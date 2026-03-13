@@ -53,11 +53,13 @@ function TournamentHeader({
   status,
   round,
   lastUpdated,
+  isLive,
 }: {
   name: string;
   status: string;
   round: number | null;
   lastUpdated: string | null;
+  isLive: boolean;
 }) {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -76,8 +78,8 @@ function TournamentHeader({
       <div className="text-gray-400 text-xs mb-4">{today}</div>
       <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-1.5 text-sm">
         <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isLive ? "bg-green-400" : "bg-yellow-400"}`}></span>
+          <span className={`relative inline-flex rounded-full h-2 w-2 ${isLive ? "bg-green-500" : "bg-yellow-500"}`}></span>
         </span>
         <span className="text-gray-600">{status}</span>
       </div>
@@ -276,6 +278,7 @@ export default function Leaderboard() {
           status={tournamentStatus}
           round={currentRound}
           lastUpdated={lastUpdated}
+          isLive={teams.some((t) => t.players.some((p) => p.thru !== "--" && p.thru !== "F"))}
         />
 
         {/* Standings */}
