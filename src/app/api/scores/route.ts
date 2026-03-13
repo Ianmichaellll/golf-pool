@@ -87,27 +87,39 @@ function findPoolMatch(espnName: string): string | null {
   return null;
 }
 
-function getCurrentRound(competitor: ESPNCompetitor): ESPNLinescore | null {
-  if (!competitor.linescores || competitor.linescores.length === 0) return null;
-  // Find the latest round that has actual hole data (skip empty placeholders)
-  for (let i = competitor.linescores.length - 1; i >= 0; i--) {
-    const round = competitor.linescores[i];
-    if (round.linescores && round.linescores.length > 0) {
-      return round;
+function getTournamentRound(competitors: ESPNCompetitor[]): number {
+  // Determine the current round by finding the highest round any player has hole data for
+  let maxRound = 1;
+  for (const c of competitors) {
+    if (!c.linescores) continue;
+    for (const round of c.linescores) {
+      if (round.linescores && round.linescores.length > 0 && round.period > maxRound) {
+        maxRound = round.period;
+      }
     }
   }
-  return null;
+  return maxRound;
 }
 
-function getThru(competitor: ESPNCompetitor): string {
-  const round = getCurrentRound(competitor);
+function getCurrentRoundData(competitor: ESPNCompetitor, tournamentRound: number): ESPNLinescore | null {
+  if (!competitor.linescores || competitor.linescores.length === 0) return null;
+  // Find the entry for the current tournament round
+  const roundEntry = competitor.linescores.find(r => r.period === tournamentRound);
+  if (!roundEntry) return null;
+  // Only return if they have actual hole data for this round
+  if (!roundEntry.linescores || roundEntry.linescores.length === 0) return null;
+  return roundEntry;
+}
+
+function getThru(competitor: ESPNCompetitor, tournamentRound: number): string {
+  const round = getCurrentRoundData(competitor, tournamentRound);
   if (!round) return "--";
   const holesPlayed = round.linescores!.length;
   return holesPlayed >= 18 ? "F" : String(holesPlayed);
 }
 
-function getTodayScore(competitor: ESPNCompetitor): string {
-  const round = getCurrentRound(competitor);
+function getTodayScore(competitor: ESPNCompetitor, tournamentRound: number): string {
+  const round = getCurrentRoundData(competitor, tournamentRound);
   if (!round) return "--";
   return round.displayValue || "--";
 }
@@ -207,6 +219,7 @@ export async function GET() {
     const competition = event.competitions[0];
     const competitors = competition.competitors || [];
     const positionMap = computePosition(competitors);
+    const currentRound = getTournamentRound(competitors);
 
     // Build player score map
     const playerScores: Record<
@@ -220,8 +233,8 @@ export async function GET() {
         playerScores[match] = {
           position: positionMap.get(c.athlete.displayName.toLowerCase()) || "--",
           score: c.score || "E",
-          thru: getThru(c),
-          today: getTodayScore(c),
+          thru: getThru(c, currentRound),
+          today: getTodayScore(c, currentRound),
           order: c.order,
         };
       }
@@ -291,6 +304,7 @@ export async function GET() {
     const result = {
       tournament: event.name,
       status: eventStatus,
+      round: currentRound,
       teams,
       updatedAt: new Date().toISOString(),
     };

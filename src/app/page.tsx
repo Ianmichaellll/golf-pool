@@ -41,6 +41,7 @@ type TeamDisplay = {
 type APIResponse = {
   tournament: string;
   status: string;
+  round?: number;
   teams: TeamDisplay[];
   updatedAt: string;
 };
@@ -50,10 +51,12 @@ type APIResponse = {
 function TournamentHeader({
   name,
   status,
+  round,
   lastUpdated,
 }: {
   name: string;
   status: string;
+  round: number | null;
   lastUpdated: string | null;
 }) {
   const today = new Date().toLocaleDateString("en-US", {
@@ -69,6 +72,7 @@ function TournamentHeader({
         Golf Pool
       </h1>
       <div className="text-gray-500 text-sm mb-1">{name}</div>
+      {round && <div className="text-gray-500 text-xs font-medium mb-1">Round {round}</div>}
       <div className="text-gray-400 text-xs mb-4">{today}</div>
       <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-1.5 text-sm">
         <span className="relative flex h-2 w-2">
@@ -211,6 +215,7 @@ export default function Leaderboard() {
   const [tournamentStatus, setTournamentStatus] = useState(
     "Waiting for tournament to start"
   );
+  const [currentRound, setCurrentRound] = useState<number | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -221,6 +226,7 @@ export default function Leaderboard() {
       const data: APIResponse = await res.json();
       setTeams(data.teams);
       setTournamentStatus(data.status);
+      setCurrentRound(data.round || null);
       setLastUpdated(data.updatedAt);
       setLoaded(true);
     } catch {
@@ -268,6 +274,7 @@ export default function Leaderboard() {
         <TournamentHeader
           name={POOL_DATA.tournamentName}
           status={tournamentStatus}
+          round={currentRound}
           lastUpdated={lastUpdated}
         />
 
