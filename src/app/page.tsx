@@ -84,8 +84,9 @@ function TournamentHeader({
         Golf Pool
       </h1>
       <div className="text-gray-500 text-sm mb-1">{name}</div>
-      {round && <div className="text-gray-500 text-xs font-medium mb-1">Round {round}</div>}
-      <div className="text-gray-400 text-xs mb-4">{today}</div>
+      <div className="text-gray-400 text-xs mb-4">
+        {round ? `Round ${round} — ${today}` : today}
+      </div>
       <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-1.5 text-sm">
         <span className="relative flex h-2 w-2">
           <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isLive ? "bg-green-400" : "bg-yellow-400"}`}></span>
