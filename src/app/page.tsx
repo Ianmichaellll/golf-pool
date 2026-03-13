@@ -243,18 +243,20 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
                 entry.isPoolPlayer ? "bg-green-50/60" : ""
               } ${isMcWd ? "opacity-50" : ""}`}
             >
-              <div className={`col-span-1 text-center text-xs sm:text-sm font-medium tabular-nums ${getPositionStyle(entry.position)}`}>
+              <div className="col-span-1 text-center text-xs sm:text-sm font-medium tabular-nums text-gray-900">
                 {entry.position}
               </div>
               <div className={`col-span-5 sm:col-span-5 text-xs sm:text-sm truncate ${
-                entry.isPoolPlayer ? "font-semibold text-gray-900" : "text-gray-700"
+                entry.isPoolPlayer ? "font-semibold text-gray-900" : "text-gray-900"
               }`}>
                 {entry.name}
               </div>
-              <div className={`col-span-3 text-center text-xs sm:text-sm font-medium tabular-nums ${getScoreStyle(entry.score)}`}>
+              <div className="col-span-3 text-center text-xs sm:text-sm font-medium tabular-nums text-gray-900">
                 {entry.score}
               </div>
-              <div className={`col-span-3 text-center text-xs sm:text-sm tabular-nums ${getScoreStyle(entry.today)}`}>
+              <div className={`col-span-3 text-center text-xs sm:text-sm tabular-nums ${
+                entry.today.startsWith("-") ? "text-red-600 font-medium" : "text-gray-900"
+              }`}>
                 {entry.today !== "--" ? `${entry.today} ${thruDisplay}` : "--"}
               </div>
             </div>
