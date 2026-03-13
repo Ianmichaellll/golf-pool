@@ -246,9 +246,7 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
               <div className="col-span-1 text-center text-xs sm:text-sm font-medium tabular-nums text-gray-900">
                 {entry.position}
               </div>
-              <div className={`col-span-5 sm:col-span-5 text-xs sm:text-sm truncate ${
-                entry.isPoolPlayer ? "font-semibold text-gray-900" : "text-gray-900"
-              }`}>
+              <div className="col-span-5 sm:col-span-5 text-xs sm:text-sm truncate text-gray-900">
                 {entry.name}
               </div>
               <div className="col-span-3 text-center text-xs sm:text-sm font-medium tabular-nums text-gray-900">
