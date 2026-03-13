@@ -219,6 +219,13 @@ export async function GET() {
         }
       }
 
+      // Sort players by position (best first)
+      players.sort((a, b) => {
+        const posA = parseInt(a.position.replace("T", "")) || 999;
+        const posB = parseInt(b.position.replace("T", "")) || 999;
+        return posA - posB;
+      });
+
       return {
         id: team.id,
         owner: team.owner,

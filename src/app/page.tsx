@@ -56,12 +56,20 @@ function TournamentHeader({
   status: string;
   lastUpdated: string | null;
 }) {
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
   return (
     <div className="text-center mb-8">
       <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
         Golf Pool
       </h1>
-      <div className="text-gray-500 text-sm mb-4">{name}</div>
+      <div className="text-gray-500 text-sm mb-1">{name}</div>
+      <div className="text-gray-400 text-xs mb-4">{today}</div>
       <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-1.5 text-sm">
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
@@ -111,20 +119,20 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
 
       {/* Players table */}
       <div className="divide-y divide-gray-50">
-        <div className="grid grid-cols-12 px-5 py-2 text-xs text-gray-400 uppercase tracking-wide">
-          <div className="col-span-5">Player</div>
+        <div className="grid grid-cols-10 sm:grid-cols-12 px-4 sm:px-5 py-2 text-xs text-gray-400 uppercase tracking-wide">
+          <div className="col-span-4 sm:col-span-5">Player</div>
           <div className="col-span-2 text-center">Pos</div>
           <div className="col-span-2 text-center">Score</div>
-          <div className="col-span-1 text-center">Thru</div>
+          <div className="hidden sm:block sm:col-span-1 text-center">Thru</div>
           <div className="col-span-2 text-center">Today</div>
         </div>
 
         {activePlayers.map((player) => (
           <div
             key={player.name}
-            className="grid grid-cols-12 px-5 py-2.5 items-center hover:bg-gray-50 transition-colors"
+            className="grid grid-cols-10 sm:grid-cols-12 px-4 sm:px-5 py-2.5 items-center hover:bg-gray-50 transition-colors"
           >
-            <div className="col-span-5 text-sm font-medium text-gray-800 truncate">
+            <div className="col-span-4 sm:col-span-5 text-sm font-medium text-gray-800 truncate">
               {player.name}
             </div>
             <div
@@ -141,7 +149,7 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
             >
               {player.score}
             </div>
-            <div className="col-span-1 text-center text-sm text-gray-500 tabular-nums">
+            <div className="hidden sm:block sm:col-span-1 text-center text-sm text-gray-500 tabular-nums">
               {player.thru}
             </div>
             <div
@@ -157,9 +165,9 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
         {wdPlayers.map((player) => (
           <div
             key={player.name}
-            className="grid grid-cols-12 px-5 py-2.5 items-center bg-red-50/50"
+            className="grid grid-cols-10 sm:grid-cols-12 px-4 sm:px-5 py-2.5 items-center bg-red-50/50"
           >
-            <div className="col-span-5 text-sm text-gray-400 line-through truncate">
+            <div className="col-span-4 sm:col-span-5 text-sm text-gray-400 line-through truncate">
               {player.name}
             </div>
             <div className="col-span-2 text-center text-sm font-medium text-red-500">
@@ -168,7 +176,7 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
             <div className="col-span-2 text-center text-sm text-gray-400">
               {player.score}
             </div>
-            <div className="col-span-1 text-center text-sm text-gray-400">
+            <div className="hidden sm:block sm:col-span-1 text-center text-sm text-gray-400">
               {player.thru}
             </div>
             <div className="col-span-2 text-center text-sm text-gray-400">
