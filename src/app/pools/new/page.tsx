@@ -70,7 +70,9 @@ export default function CreatePoolPage() {
 
       router.push(`/pools/${pool.id}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to create pool");
+      const msg = err instanceof Error ? err.message : JSON.stringify(err);
+      console.error("Pool creation error:", err);
+      setError(msg);
     } finally {
       setLoading(false);
     }
