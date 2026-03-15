@@ -1,0 +1,246 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "../../lib/supabase/client";
+
+export default function CreatePoolPage() {
+  const [name, setName] = useState("");
+  const [tournament, setTournament] = useState("The Masters 2026");
+  const [numTeams, setNumTeams] = useState(8);
+  const [playersPerTeam, setPlayersPerTeam] = useState(4);
+  const [draftType, setDraftType] = useState<"snake" | "regular">("snake");
+  const [extrasCount, setExtrasCount] = useState(0);
+  const [timerSeconds, setTimerSeconds] = useState(120);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+
+  const tournaments = [
+    "The Masters 2026",
+    "PGA Championship 2026",
+    "U.S. Open 2026",
+    "The Open Championship 2026",
+  ];
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not logged in");
+
+      // Create the pool
+      const { data: pool, error: poolErr } = await supabase
+        .from("pools")
+        .insert({
+          name,
+          tournament,
+          admin_id: user.id,
+          num_teams: numTeams,
+          players_per_team: playersPerTeam,
+          draft_type: draftType,
+          extras_count: extrasCount,
+          timer_seconds: timerSeconds,
+        })
+        .select()
+        .single();
+
+      if (poolErr) throw poolErr;
+
+      // Add admin as first member
+      const { error: memberErr } = await supabase
+        .from("pool_members")
+        .insert({ pool_id: pool.id, user_id: user.id });
+
+      if (memberErr) throw memberErr;
+
+      // Create the draft record
+      const { error: draftErr } = await supabase
+        .from("drafts")
+        .insert({
+          pool_id: pool.id,
+          total_picks: numTeams * (playersPerTeam + extrasCount),
+        });
+
+      if (draftErr) throw draftErr;
+
+      router.push(`/pools/${pool.id}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to create pool");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="max-w-md mx-auto px-4 py-8">
+      <h1 className="text-xl font-bold mb-6" style={{ color: "var(--gray-900)" }}>
+        Create Pool
+      </h1>
+
+      <form onSubmit={handleCreate} className="space-y-5">
+        {/* Pool Name */}
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+            Pool Name
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., The Boys Masters Pool"
+            required
+            className="w-full px-3 py-2 rounded-lg border text-sm"
+            style={{ borderColor: "var(--gray-300)", background: "white" }}
+          />
+        </div>
+
+        {/* Tournament */}
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+            Tournament
+          </label>
+          <select
+            value={tournament}
+            onChange={(e) => setTournament(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border text-sm"
+            style={{ borderColor: "var(--gray-300)", background: "white" }}
+          >
+            {tournaments.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Draft Type */}
+        <div>
+          <label className="block text-sm font-medium mb-2" style={{ color: "var(--gray-700)" }}>
+            Draft Type
+          </label>
+          <div className="flex gap-3">
+            {(["snake", "regular"] as const).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setDraftType(type)}
+                className="flex-1 py-2 rounded-lg border text-sm font-medium transition-colors"
+                style={{
+                  borderColor: draftType === type ? "var(--green)" : "var(--gray-300)",
+                  background: draftType === type ? "var(--green)" : "white",
+                  color: draftType === type ? "white" : "var(--gray-700)",
+                }}
+              >
+                {type === "snake" ? "Snake" : "Regular"}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs mt-1" style={{ color: "var(--gray-400)" }}>
+            {draftType === "snake"
+              ? "Order reverses each round (1-8, 8-1, 1-8...)"
+              : "Same order every round (1-8, 1-8, 1-8...)"}
+          </p>
+        </div>
+
+        {/* Number of Teams */}
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+            Number of Teams
+          </label>
+          <select
+            value={numTeams}
+            onChange={(e) => setNumTeams(Number(e.target.value))}
+            className="w-full px-3 py-2 rounded-lg border text-sm"
+            style={{ borderColor: "var(--gray-300)", background: "white" }}
+          >
+            {[4, 6, 8, 10, 12].map((n) => (
+              <option key={n} value={n}>{n} teams</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Players Per Team */}
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+            Players Per Team
+          </label>
+          <select
+            value={playersPerTeam}
+            onChange={(e) => setPlayersPerTeam(Number(e.target.value))}
+            className="w-full px-3 py-2 rounded-lg border text-sm"
+            style={{ borderColor: "var(--gray-300)", background: "white" }}
+          >
+            {[3, 4, 5, 6].map((n) => (
+              <option key={n} value={n}>{n} players</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Extra Picks */}
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+            Extra Picks (for withdrawals)
+          </label>
+          <select
+            value={extrasCount}
+            onChange={(e) => setExtrasCount(Number(e.target.value))}
+            className="w-full px-3 py-2 rounded-lg border text-sm"
+            style={{ borderColor: "var(--gray-300)", background: "white" }}
+          >
+            {[0, 1, 2, 3].map((n) => (
+              <option key={n} value={n}>{n} extra{n !== 1 ? "s" : ""}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Pick Timer */}
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+            Pick Timer
+          </label>
+          <select
+            value={timerSeconds}
+            onChange={(e) => setTimerSeconds(Number(e.target.value))}
+            className="w-full px-3 py-2 rounded-lg border text-sm"
+            style={{ borderColor: "var(--gray-300)", background: "white" }}
+          >
+            <option value={60}>1 minute</option>
+            <option value={90}>1.5 minutes</option>
+            <option value={120}>2 minutes</option>
+            <option value={180}>3 minutes</option>
+            <option value={300}>5 minutes</option>
+          </select>
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+        )}
+
+        {/* Summary */}
+        <div
+          className="rounded-lg p-3 text-sm"
+          style={{ background: "var(--gray-100)", color: "var(--gray-600)" }}
+        >
+          <p className="font-medium mb-1" style={{ color: "var(--gray-700)" }}>Summary</p>
+          <p>{numTeams} teams drafting {playersPerTeam} players each ({draftType} draft)</p>
+          <p>{numTeams * (playersPerTeam + extrasCount)} total picks, {timerSeconds}s per pick</p>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading || !name}
+          className="w-full py-2.5 rounded-lg text-white text-sm font-semibold"
+          style={{
+            background: "var(--green)",
+            opacity: loading || !name ? 0.5 : 1,
+          }}
+        >
+          {loading ? "Creating..." : "Create Pool"}
+        </button>
+      </form>
+    </div>
+  );
+}
