@@ -145,6 +145,7 @@ export default function PoolLobbyPage() {
   async function handleStartDraft() {
     if (!pool || members.length < 2) return;
 
+    // Shuffle all pool members into draft order
     const shuffled = [...members]
       .sort(() => Math.random() - 0.5)
       .map((m, i) => ({ user_id: m.user_id, position: i + 1 }));
@@ -161,8 +162,10 @@ export default function PoolLobbyPage() {
       .sort((a, b) => a.position - b.position)
       .map((s) => s.user_id);
 
+    // Use actual member count for picks (not num_teams, in case not all joined)
+    const actualTeams = members.length;
     const totalPicks =
-      pool.num_teams * (pool.players_per_team + pool.extras_count);
+      actualTeams * (pool.players_per_team + pool.extras_count);
 
     // 5-minute pre-draft countdown
     const draftStartsAt = new Date(Date.now() + 5 * 60 * 1000);

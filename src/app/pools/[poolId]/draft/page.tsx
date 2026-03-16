@@ -138,6 +138,11 @@ export default function DraftPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const autoPickingRef = useRef(false);
+  const picksRef = useRef(picks);
+  picksRef.current = picks;
+  const playersRef = useRef(players);
+  playersRef.current = players;
 
   // Player lookup by name for headshots on the board
   const playerMap = useRef(new Map<string, Player>());
@@ -269,7 +274,7 @@ export default function DraftPage() {
     };
   }, [draft?.id, poolId]);
 
-  // ─── Countdown timer (pre-draft + pick timer) ─────────────────────
+  // ─── Countdown timer (pre-draft + pick timer + auto-pick) ──────────
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
 
@@ -294,15 +299,6 @@ export default function DraftPage() {
         setPhase("active");
         setCountdown("");
 
-        // Set pick timer deadline on first transition to active
-        if (
-          !draftRef.current.current_turn_deadline &&
-          draftRef.current.current_pick === 0
-        ) {
-          // No deadline set yet — this is the first tick after pre-draft ends
-          // The first pick timer will be set when handlePick or auto-pick runs
-        }
-
         if (draftRef.current.current_turn_deadline) {
           const deadline = new Date(
             draftRef.current.current_turn_deadline
@@ -313,7 +309,11 @@ export default function DraftPage() {
             const secs = Math.floor((remaining % 60000) / 1000);
             setPickTimer(`${mins}:${secs.toString().padStart(2, "0")}`);
           } else {
+            // Timer expired — auto-pick!
             setPickTimer("0:00");
+            if (!autoPickingRef.current) {
+              autoPick();
+            }
           }
         }
       }
@@ -333,7 +333,6 @@ export default function DraftPage() {
       draft.current_pick === 0 &&
       pool
     ) {
-      // Set the first pick timer
       supabase
         .from("drafts")
         .update({
@@ -346,16 +345,20 @@ export default function DraftPage() {
     }
   }, [phase, draft?.current_turn_deadline, draft?.current_pick]);
 
+
   // ─── Get who picks at each slot ────────────────────────────────────
+  // Use draft_order length as actual team count (may be less than pool.num_teams)
+  const actualTeams = draft?.draft_order?.length || pool?.num_teams || 0;
+
   const currentPickUserId = useCallback(() => {
     if (!draft || !pool) return null;
     return getPickUserId(
       draft.current_pick,
       draft.draft_order,
-      pool.num_teams,
+      actualTeams,
       pool.draft_type
     );
-  }, [draft, pool]);
+  }, [draft, pool, actualTeams]);
 
   const isMyTurn = phase === "active" && currentPickUserId() === userId;
 
@@ -370,43 +373,84 @@ export default function DraftPage() {
         g.country.toLowerCase().includes(search.toLowerCase())
     );
 
-  // ─── Make a pick ───────────────────────────────────────────────────
+  // ─── Make a pick (manual or auto) ───────────────────────────────────
+  async function makePick(
+    golferName: string,
+    forUserId: string,
+    isAuto: boolean
+  ) {
+    if (!draft || !pool) return;
+
+    const round = getPickRound(draft.current_pick, actualTeams);
+
+    const { error: pickErr } = await supabase.from("draft_picks").insert({
+      draft_id: draft.id,
+      pool_id: poolId,
+      user_id: forUserId,
+      golfer_name: golferName,
+      pick_number: draft.current_pick,
+      round,
+      is_auto: isAuto,
+    });
+    if (pickErr) throw pickErr;
+
+    const nextPick = draft.current_pick + 1;
+    const isComplete = nextPick >= draft.total_picks;
+
+    await supabase
+      .from("drafts")
+      .update({
+        current_pick: nextPick,
+        current_turn_deadline: isComplete
+          ? null
+          : new Date(Date.now() + pool.timer_seconds * 1000).toISOString(),
+        status: isComplete ? "completed" : "active",
+        completed_at: isComplete ? new Date().toISOString() : null,
+      })
+      .eq("id", draft.id);
+  }
+
   async function handlePick(player: Player) {
     if (!isMyTurn || !draft || !pool || picking) return;
     setPicking(true);
-
     try {
-      const round = getPickRound(draft.current_pick, pool.num_teams);
-
-      const { error: pickErr } = await supabase.from("draft_picks").insert({
-        draft_id: draft.id,
-        pool_id: poolId,
-        user_id: userId,
-        golfer_name: player.name,
-        pick_number: draft.current_pick,
-        round,
-        is_auto: false,
-      });
-      if (pickErr) throw pickErr;
-
-      const nextPick = draft.current_pick + 1;
-      const isComplete = nextPick >= draft.total_picks;
-
-      await supabase
-        .from("drafts")
-        .update({
-          current_pick: nextPick,
-          current_turn_deadline: isComplete
-            ? null
-            : new Date(Date.now() + pool.timer_seconds * 1000).toISOString(),
-          status: isComplete ? "completed" : "active",
-          completed_at: isComplete ? new Date().toISOString() : null,
-        })
-        .eq("id", draft.id);
+      await makePick(player.name, userId!, false);
     } catch (err) {
       console.error("Pick error:", err);
     } finally {
       setPicking(false);
+    }
+  }
+
+  // ─── Auto-pick: highest ranked available player ───────────────────
+  async function autoPick() {
+    if (autoPickingRef.current) return;
+    const currentDraft = draftRef.current;
+    const currentPool = pool;
+    if (!currentDraft || !currentPool || !userId) return;
+    if (currentDraft.status === "completed") return;
+
+    autoPickingRef.current = true;
+
+    try {
+      const pickedNames = new Set(picksRef.current.map((p) => p.golfer_name));
+      const bestAvailable = playersRef.current.find(
+        (p) => !pickedNames.has(p.name)
+      );
+      if (!bestAvailable) return;
+
+      const pickForUserId = getPickUserId(
+        currentDraft.current_pick,
+        currentDraft.draft_order,
+        currentDraft.draft_order.length,
+        currentPool.draft_type
+      );
+
+      await makePick(bestAvailable.name, pickForUserId, true);
+    } catch (err) {
+      console.error("Auto-pick error:", err);
+    } finally {
+      autoPickingRef.current = false;
     }
   }
 
@@ -514,7 +558,7 @@ export default function DraftPage() {
               : `${getName(currentPickUserId()!)} is picking...`}
           </p>
           <p className="text-xs mt-0.5" style={{ opacity: 0.8 }}>
-            Round {getPickRound(draft.current_pick, pool.num_teams)} &middot;
+            Round {getPickRound(draft.current_pick, actualTeams)} &middot;
             Pick #{draft.current_pick + 1}
           </p>
         </div>
@@ -622,9 +666,9 @@ export default function DraftPage() {
                     {columnOrder.map((uid, colIdx) => {
                       const pickNum =
                         pool.draft_type === "snake" && roundIdx % 2 === 1
-                          ? roundIdx * pool.num_teams +
-                            (pool.num_teams - 1 - colIdx)
-                          : roundIdx * pool.num_teams + colIdx;
+                          ? roundIdx * actualTeams +
+                            (actualTeams - 1 - colIdx)
+                          : roundIdx * actualTeams + colIdx;
 
                       const pick = picks.find(
                         (p) => p.pick_number === pickNum
