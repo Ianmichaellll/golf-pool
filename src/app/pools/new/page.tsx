@@ -12,6 +12,11 @@ export default function CreatePoolPage() {
   const [draftType, setDraftType] = useState<"snake" | "regular">("snake");
   const [extrasCount, setExtrasCount] = useState(0);
   const [timerSeconds, setTimerSeconds] = useState(120);
+  const [draftDate, setDraftDate] = useState("");
+  const [draftTime, setDraftTime] = useState("19:00");
+  const [draftTimezone, setDraftTimezone] = useState(
+    Intl.DateTimeFormat().resolvedOptions().timeZone
+  );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -34,6 +39,13 @@ export default function CreatePoolPage() {
       if (!user) throw new Error("Not logged in");
 
       // Create the pool
+      // Build draft start time if date is set
+      let draft_start_time: string | null = null;
+      if (draftDate && draftTime) {
+        const dt = new Date(`${draftDate}T${draftTime}`);
+        draft_start_time = dt.toISOString();
+      }
+
       const { data: pool, error: poolErr } = await supabase
         .from("pools")
         .insert({
@@ -45,6 +57,7 @@ export default function CreatePoolPage() {
           draft_type: draftType,
           extras_count: extrasCount,
           timer_seconds: timerSeconds,
+          draft_start_time,
         })
         .select()
         .single();
@@ -217,6 +230,47 @@ export default function CreatePoolPage() {
           </select>
         </div>
 
+        {/* Draft Start Time */}
+        <div>
+          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+            Draft Start Time
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={draftDate}
+              onChange={(e) => setDraftDate(e.target.value)}
+              className="flex-1 px-3 py-2 rounded-lg border text-sm"
+              style={{ borderColor: "var(--gray-300)", background: "white" }}
+            />
+            <input
+              type="time"
+              value={draftTime}
+              onChange={(e) => setDraftTime(e.target.value)}
+              className="w-28 px-3 py-2 rounded-lg border text-sm"
+              style={{ borderColor: "var(--gray-300)", background: "white" }}
+            />
+          </div>
+          <select
+            value={draftTimezone}
+            onChange={(e) => setDraftTimezone(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border text-sm mt-2"
+            style={{ borderColor: "var(--gray-300)", background: "white" }}
+          >
+            <option value="America/New_York">Eastern (ET)</option>
+            <option value="America/Chicago">Central (CT)</option>
+            <option value="America/Denver">Mountain (MT)</option>
+            <option value="America/Los_Angeles">Pacific (PT)</option>
+            <option value="America/Anchorage">Alaska (AKT)</option>
+            <option value="Pacific/Honolulu">Hawaii (HT)</option>
+          </select>
+          <p className="text-xs mt-1" style={{ color: "var(--gray-400)" }}>
+            {draftDate
+              ? `Draft scheduled for ${new Date(`${draftDate}T${draftTime}`).toLocaleString("en-US", { timeZone: draftTimezone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}`
+              : "Leave blank to start manually from the lobby"}
+          </p>
+        </div>
+
         {error && (
           <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
         )}
@@ -229,6 +283,9 @@ export default function CreatePoolPage() {
           <p className="font-medium mb-1" style={{ color: "var(--gray-700)" }}>Summary</p>
           <p>{numTeams} teams drafting {playersPerTeam} players each ({draftType} draft)</p>
           <p>{numTeams * (playersPerTeam + extrasCount)} total picks, {timerSeconds}s per pick</p>
+          {draftDate && (
+            <p>Draft: {new Date(`${draftDate}T${draftTime}`).toLocaleString("en-US", { timeZone: draftTimezone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}</p>
+          )}
         </div>
 
         <button

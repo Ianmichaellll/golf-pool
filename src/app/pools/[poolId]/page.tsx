@@ -15,6 +15,7 @@ type PoolDetails = {
   num_teams: number;
   extras_count: number;
   timer_seconds: number;
+  draft_start_time: string | null;
   status: string;
 };
 
@@ -266,6 +267,15 @@ export default function PoolLobbyPage() {
           <p>Extra picks: <span className="font-medium">{pool.extras_count}</span></p>
           <p>Total picks: <span className="font-medium">{pool.num_teams * (pool.players_per_team + pool.extras_count)}</span></p>
         </div>
+        {pool.draft_start_time && (
+          <div className="mt-3 pt-3 border-t" style={{ borderColor: "var(--gray-100)" }}>
+            <p className="text-sm" style={{ color: "var(--gray-700)" }}>
+              Draft starts: <span className="font-semibold" style={{ color: "var(--green)" }}>
+                {new Date(pool.draft_start_time).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}
+              </span>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
