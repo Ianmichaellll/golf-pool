@@ -3,8 +3,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "../../../lib/supabase/client";
-import { MASTERS_2026_FIELD, oddsToNumber } from "../../../lib/golfers";
+import { MASTERS_2026_FIELD, oddsToNumber, getHeadshotUrl } from "../../../lib/golfers";
 import type { Golfer } from "../../../lib/golfers";
+
+// Golfer lookup by name for headshots on the board
+const GOLFER_MAP = new Map(MASTERS_2026_FIELD.map((g) => [g.name, g]));
 
 // ─── Types ───────────────────────────────────────────────────────────
 type Draft = {
@@ -549,17 +552,33 @@ export default function DraftPage() {
                           }}
                         >
                           {pick ? (
-                            <span className="text-xs font-medium">
-                              {pick.golfer_name.split(" ").pop()}
+                            <div className="flex flex-col items-center gap-0.5">
+                              {GOLFER_MAP.get(pick.golfer_name) && (
+                                <img
+                                  src={getHeadshotUrl(
+                                    GOLFER_MAP.get(pick.golfer_name)!.espnId,
+                                    48
+                                  )}
+                                  alt=""
+                                  className="w-6 h-6 rounded-full object-cover"
+                                  style={{ background: "var(--gray-100)" }}
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = "none";
+                                  }}
+                                />
+                              )}
+                              <span className="text-xs font-medium leading-tight">
+                                {pick.golfer_name.split(" ").pop()}
+                              </span>
                               {pick.is_auto && (
                                 <span
-                                  className="block text-[9px]"
+                                  className="text-[9px]"
                                   style={{ color: "var(--gray-400)" }}
                                 >
                                   auto
                                 </span>
                               )}
-                            </span>
+                            </div>
                           ) : isCurrent ? (
                             <span
                               className="inline-block w-2 h-2 rounded-full animate-pulse"
@@ -604,17 +623,28 @@ export default function DraftPage() {
                   className="px-3 py-2 flex items-center justify-between border-b"
                   style={{ borderColor: "var(--gray-50)" }}
                 >
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className="text-sm font-medium truncate"
-                      style={{ color: "var(--gray-900)" }}
-                    >
-                      {golfer.name}
-                    </p>
-                    <p className="text-[10px]" style={{ color: "var(--gray-400)" }}>
-                      {golfer.country} &middot; #{golfer.rank} &middot;{" "}
-                      {golfer.odds}
-                    </p>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <img
+                      src={getHeadshotUrl(golfer.espnId, 64)}
+                      alt={golfer.name}
+                      className="w-8 h-8 rounded-full object-cover shrink-0"
+                      style={{ background: "var(--gray-100)" }}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                    <div className="min-w-0">
+                      <p
+                        className="text-sm font-medium truncate"
+                        style={{ color: "var(--gray-900)" }}
+                      >
+                        {golfer.name}
+                      </p>
+                      <p className="text-[10px]" style={{ color: "var(--gray-400)" }}>
+                        {golfer.country} &middot; #{golfer.rank} &middot;{" "}
+                        {golfer.odds}
+                      </p>
+                    </div>
                   </div>
                   {isMyTurn && phase === "active" && (
                     <button
