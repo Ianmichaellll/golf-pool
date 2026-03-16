@@ -489,12 +489,13 @@ export default function DraftPage() {
           </div>
         )}
         {phase === "completed" && (
-          <div
-            className="px-3 py-1 rounded-lg text-sm font-semibold"
-            style={{ background: "var(--green)", color: "white" }}
+          <button
+            onClick={() => window.location.href = "/"}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+            style={{ background: "var(--green)" }}
           >
-            Draft Complete
-          </div>
+            View Pool Standings
+          </button>
         )}
       </div>
 
@@ -537,6 +538,25 @@ export default function DraftPage() {
               </span>
             ))}
           </p>
+        </div>
+      )}
+
+      {/* Draft complete banner */}
+      {phase === "completed" && (
+        <div
+          className="rounded-lg px-4 py-4 mb-4 text-center"
+          style={{ background: "var(--green)", color: "white" }}
+        >
+          <p className="text-sm font-semibold">
+            Draft Complete! All {draft.total_picks} picks are in.
+          </p>
+          <button
+            onClick={() => window.location.href = "/"}
+            className="mt-2 px-6 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: "white", color: "var(--green)" }}
+          >
+            View Pool Standings
+          </button>
         </div>
       )}
 

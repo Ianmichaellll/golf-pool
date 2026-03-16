@@ -237,7 +237,7 @@ export default function CreatePoolPage() {
             className="w-full px-3 py-2 rounded-lg border text-sm"
             style={{ borderColor: "var(--gray-300)", background: "white" }}
           >
-            {[2, 4, 6, 8, 10, 12].map((n) => (
+            {Array.from({ length: 13 }, (_, i) => i + 2).map((n) => (
               <option key={n} value={n}>
                 {n} teams
               </option>
