@@ -122,6 +122,9 @@ export default function PoolLobbyPage() {
 
     const totalPicks = pool.num_teams * (pool.players_per_team + pool.extras_count);
 
+    // Start draft with 10-minute pre-draft countdown
+    const draftStartsAt = new Date(Date.now() + 10 * 60 * 1000);
+
     await supabase
       .from("drafts")
       .update({
@@ -129,8 +132,7 @@ export default function PoolLobbyPage() {
         draft_order: draftOrder,
         current_pick: 0,
         total_picks: totalPicks,
-        started_at: new Date().toISOString(),
-        current_turn_deadline: new Date(Date.now() + pool.timer_seconds * 1000).toISOString(),
+        started_at: draftStartsAt.toISOString(),
       })
       .eq("pool_id", poolId);
 
