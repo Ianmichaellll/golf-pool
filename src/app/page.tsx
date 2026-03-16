@@ -80,7 +80,7 @@ function TournamentHeader({
   return (
     <div className="text-center mb-8">
       <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1">
-        Golf Pool
+        Easy Pool
       </h1>
       <div className="text-gray-500 text-sm mb-1">{name}</div>
       <div className="text-gray-400 text-xs mb-4">

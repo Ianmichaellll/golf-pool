@@ -66,7 +66,7 @@ export default function NavBar() {
         className="text-lg font-bold"
         style={{ color: "var(--green)" }}
       >
-        Golf Pool
+        Easy Pool
       </a>
 
       <div className="flex items-center gap-3">

@@ -63,7 +63,7 @@ function LoginForm() {
         {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold" style={{ color: "var(--green)" }}>
-            Golf Pool
+            Easy Pool
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--gray-500)" }}>
             {isSignUp ? "Create your account" : "Sign in to your account"}

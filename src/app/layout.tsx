@@ -3,7 +3,7 @@ import "./globals.css";
 import NavBar from "./components/NavBar";
 
 export const metadata: Metadata = {
-  title: "Golf Pool",
+  title: "Easy Pool",
   description: "Live golf pool leaderboard",
 };
 

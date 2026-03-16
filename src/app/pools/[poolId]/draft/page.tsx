@@ -3,11 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "../../../lib/supabase/client";
-import { MASTERS_2026_FIELD, oddsToNumber, getHeadshotUrl } from "../../../lib/golfers";
-import type { Golfer } from "../../../lib/golfers";
-
-// Golfer lookup by name for headshots on the board
-const GOLFER_MAP = new Map(MASTERS_2026_FIELD.map((g) => [g.name, g]));
 
 // ─── Types ───────────────────────────────────────────────────────────
 type Draft = {
@@ -25,6 +20,7 @@ type Pool = {
   id: string;
   name: string;
   tournament: string;
+  espn_event_id: string | null;
   num_teams: number;
   players_per_team: number;
   extras_count: number;
@@ -45,6 +41,61 @@ type Member = {
   display_name: string;
   draft_position: number;
 };
+
+type Player = {
+  espnId: number;
+  name: string;
+  country: string;
+  rank: number;
+};
+
+// ─── Headshot helper with placeholder fallback ──────────────────────
+function headshotUrl(espnId: number): string {
+  return `https://a.espncdn.com/combiner/i?img=/i/headshots/golf/players/full/${espnId}.png&w=80&h=58`;
+}
+
+function HeadshotImg({
+  espnId,
+  name,
+  size = 32,
+  className = "",
+}: {
+  espnId: number;
+  name: string;
+  size?: number;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed || !espnId) {
+    // Generic golfer silhouette placeholder
+    return (
+      <span
+        className={`inline-flex items-center justify-center rounded-full shrink-0 ${className}`}
+        style={{
+          width: size,
+          height: size,
+          background: "var(--gray-200)",
+          color: "var(--gray-400)",
+          fontSize: size * 0.4,
+          fontWeight: 600,
+        }}
+      >
+        {name?.[0]?.toUpperCase() || "?"}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={headshotUrl(espnId)}
+      alt={name}
+      className={`rounded-full object-cover shrink-0 ${className}`}
+      style={{ width: size, height: size, background: "var(--gray-200)" }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 // ─── Snake Draft Helper ──────────────────────────────────────────────
 function getPickUserId(
@@ -74,16 +125,22 @@ export default function DraftPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [picks, setPicks] = useState<Pick[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [picking, setPicking] = useState(false);
   const [countdown, setCountdown] = useState("");
-  const [phase, setPhase] = useState<"pre_draft" | "active" | "completed">("pre_draft");
+  const [phase, setPhase] = useState<"pre_draft" | "active" | "completed">(
+    "pre_draft"
+  );
   const [pickTimer, setPickTimer] = useState("");
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+
+  // Player lookup by name for headshots on the board
+  const playerMap = useRef(new Map<string, Player>());
 
   // ─── Load initial data ─────────────────────────────────────────────
   useEffect(() => {
@@ -102,6 +159,24 @@ export default function DraftPage() {
       if (!poolData) return;
       setPool(poolData);
 
+      // Fetch player field from ESPN
+      if (poolData.espn_event_id) {
+        try {
+          const res = await fetch(
+            `/api/tournaments/${poolData.espn_event_id}/field`
+          );
+          const data = await res.json();
+          if (data.players?.length) {
+            setPlayers(data.players);
+            const map = new Map<string, Player>();
+            data.players.forEach((p: Player) => map.set(p.name, p));
+            playerMap.current = map;
+          }
+        } catch (err) {
+          console.error("Failed to load field:", err);
+        }
+      }
+
       const { data: draftData } = await supabase
         .from("drafts")
         .select("*")
@@ -109,7 +184,6 @@ export default function DraftPage() {
         .single();
       if (draftData) setDraft(draftData);
 
-      // Load members with profiles
       const { data: memberData } = await supabase
         .from("pool_members")
         .select("user_id, draft_position")
@@ -134,7 +208,6 @@ export default function DraftPage() {
         );
       }
 
-      // Load existing picks
       const { data: pickData } = await supabase
         .from("draft_picks")
         .select("pick_number, user_id, golfer_name, is_auto")
@@ -208,7 +281,6 @@ export default function DraftPage() {
       const diff = startTime - now;
 
       if (diff > 0) {
-        // Pre-draft countdown
         setPhase("pre_draft");
         const mins = Math.floor(diff / 60000);
         const secs = Math.floor((diff % 60000) / 1000);
@@ -219,11 +291,18 @@ export default function DraftPage() {
         setCountdown("");
         setPickTimer("");
       } else {
-        // Draft is active
         setPhase("active");
         setCountdown("");
 
-        // Pick timer
+        // Set pick timer deadline on first transition to active
+        if (
+          !draftRef.current.current_turn_deadline &&
+          draftRef.current.current_pick === 0
+        ) {
+          // No deadline set yet — this is the first tick after pre-draft ends
+          // The first pick timer will be set when handlePick or auto-pick runs
+        }
+
         if (draftRef.current.current_turn_deadline) {
           const deadline = new Date(
             draftRef.current.current_turn_deadline
@@ -245,6 +324,28 @@ export default function DraftPage() {
     };
   }, [draft?.started_at, draft?.status, draft?.current_turn_deadline]);
 
+  // ─── Set first pick timer when pre-draft ends ─────────────────────
+  useEffect(() => {
+    if (
+      phase === "active" &&
+      draft &&
+      !draft.current_turn_deadline &&
+      draft.current_pick === 0 &&
+      pool
+    ) {
+      // Set the first pick timer
+      supabase
+        .from("drafts")
+        .update({
+          current_turn_deadline: new Date(
+            Date.now() + pool.timer_seconds * 1000
+          ).toISOString(),
+        })
+        .eq("id", draft.id)
+        .then(() => {});
+    }
+  }, [phase, draft?.current_turn_deadline, draft?.current_pick]);
+
   // ─── Get who picks at each slot ────────────────────────────────────
   const currentPickUserId = useCallback(() => {
     if (!draft || !pool) return null;
@@ -256,41 +357,38 @@ export default function DraftPage() {
     );
   }, [draft, pool]);
 
-  const isMyTurn =
-    phase === "active" && currentPickUserId() === userId;
+  const isMyTurn = phase === "active" && currentPickUserId() === userId;
 
-  // ─── Available golfers ─────────────────────────────────────────────
+  // ─── Available players ─────────────────────────────────────────────
   const pickedGolfers = new Set(picks.map((p) => p.golfer_name));
-  const availableGolfers = MASTERS_2026_FIELD.filter(
-    (g) => !pickedGolfers.has(g.name)
-  ).filter(
-    (g) =>
-      !search ||
-      g.name.toLowerCase().includes(search.toLowerCase()) ||
-      g.country.toLowerCase().includes(search.toLowerCase())
-  );
+  const availablePlayers = players
+    .filter((g) => !pickedGolfers.has(g.name))
+    .filter(
+      (g) =>
+        !search ||
+        g.name.toLowerCase().includes(search.toLowerCase()) ||
+        g.country.toLowerCase().includes(search.toLowerCase())
+    );
 
   // ─── Make a pick ───────────────────────────────────────────────────
-  async function handlePick(golfer: Golfer) {
+  async function handlePick(player: Player) {
     if (!isMyTurn || !draft || !pool || picking) return;
     setPicking(true);
 
     try {
       const round = getPickRound(draft.current_pick, pool.num_teams);
 
-      // Insert pick
       const { error: pickErr } = await supabase.from("draft_picks").insert({
         draft_id: draft.id,
         pool_id: poolId,
         user_id: userId,
-        golfer_name: golfer.name,
+        golfer_name: player.name,
         pick_number: draft.current_pick,
         round,
         is_auto: false,
       });
       if (pickErr) throw pickErr;
 
-      // Advance draft
       const nextPick = draft.current_pick + 1;
       const isComplete = nextPick >= draft.total_picks;
 
@@ -300,9 +398,7 @@ export default function DraftPage() {
           current_pick: nextPick,
           current_turn_deadline: isComplete
             ? null
-            : new Date(
-                Date.now() + pool.timer_seconds * 1000
-              ).toISOString(),
+            : new Date(Date.now() + pool.timer_seconds * 1000).toISOString(),
           status: isComplete ? "completed" : "active",
           completed_at: isComplete ? new Date().toISOString() : null,
         })
@@ -314,30 +410,12 @@ export default function DraftPage() {
     }
   }
 
-  // ─── Get display name for user id ──────────────────────────────────
   function getName(uid: string): string {
-    return members.find((m) => m.user_id === uid)?.display_name || "Unknown";
+    return (
+      members.find((m) => m.user_id === uid)?.display_name || "Unknown"
+    );
   }
 
-  // ─── Build draft board data ────────────────────────────────────────
-  function buildBoard() {
-    if (!pool || !draft) return { rounds: 0, board: [] };
-    const totalRounds = pool.players_per_team + pool.extras_count;
-    const board: (Pick | null)[][] = [];
-
-    for (let r = 0; r < totalRounds; r++) {
-      const row: (Pick | null)[] = [];
-      for (let t = 0; t < pool.num_teams; t++) {
-        const pickNum = r * pool.num_teams + t;
-        const pick = picks.find((p) => p.pick_number === pickNum) || null;
-        row.push(pick);
-      }
-      board.push(row);
-    }
-    return { rounds: totalRounds, board };
-  }
-
-  // ─── Draft order for display (columns) ─────────────────────────────
   function getColumnOrder(): string[] {
     if (!draft) return [];
     return draft.draft_order;
@@ -354,8 +432,8 @@ export default function DraftPage() {
 
   if (!pool || !draft) return null;
 
-  const { rounds, board } = buildBoard();
   const columnOrder = getColumnOrder();
+  const totalRounds = pool.players_per_team + pool.extras_count;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
@@ -509,7 +587,7 @@ export default function DraftPage() {
                 </tr>
               </thead>
               <tbody>
-                {board.map((row, roundIdx) => (
+                {Array.from({ length: totalRounds }).map((_, roundIdx) => (
                   <tr
                     key={roundIdx}
                     className="border-t"
@@ -522,7 +600,6 @@ export default function DraftPage() {
                       {roundIdx + 1}
                     </td>
                     {columnOrder.map((uid, colIdx) => {
-                      // Map column to correct pick based on snake/regular
                       const pickNum =
                         pool.draft_type === "snake" && roundIdx % 2 === 1
                           ? roundIdx * pool.num_teams +
@@ -535,6 +612,9 @@ export default function DraftPage() {
                       const isCurrent =
                         phase === "active" &&
                         draft.current_pick === pickNum;
+                      const pickedPlayer = pick
+                        ? playerMap.current.get(pick.golfer_name)
+                        : null;
 
                       return (
                         <td
@@ -553,20 +633,11 @@ export default function DraftPage() {
                         >
                           {pick ? (
                             <div className="flex flex-col items-center gap-0.5">
-                              {GOLFER_MAP.get(pick.golfer_name) && (
-                                <img
-                                  src={getHeadshotUrl(
-                                    GOLFER_MAP.get(pick.golfer_name)!.espnId,
-                                    48
-                                  )}
-                                  alt=""
-                                  className="w-6 h-6 rounded-full object-cover"
-                                  style={{ background: "var(--gray-100)" }}
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = "none";
-                                  }}
-                                />
-                              )}
+                              <HeadshotImg
+                                espnId={pickedPlayer?.espnId || 0}
+                                name={pick.golfer_name}
+                                size={24}
+                              />
                               <span className="text-xs font-medium leading-tight">
                                 {pick.golfer_name.split(" ").pop()}
                               </span>
@@ -603,7 +674,16 @@ export default function DraftPage() {
             className="rounded-xl border overflow-hidden"
             style={{ borderColor: "var(--gray-200)", background: "white" }}
           >
-            <div className="px-3 py-2 border-b" style={{ borderColor: "var(--gray-100)" }}>
+            <div
+              className="px-3 py-2 border-b"
+              style={{ borderColor: "var(--gray-100)" }}
+            >
+              <p
+                className="text-xs font-semibold mb-1.5"
+                style={{ color: "var(--gray-700)" }}
+              >
+                Available Players ({availablePlayers.length})
+              </p>
               <input
                 type="text"
                 value={search}
@@ -617,38 +697,36 @@ export default function DraftPage() {
               />
             </div>
             <div className="max-h-[60vh] overflow-y-auto">
-              {availableGolfers.map((golfer) => (
+              {availablePlayers.map((player) => (
                 <div
-                  key={golfer.name}
+                  key={player.espnId}
                   className="px-3 py-2 flex items-center justify-between border-b"
                   style={{ borderColor: "var(--gray-50)" }}
                 >
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <img
-                      src={getHeadshotUrl(golfer.espnId, 64)}
-                      alt={golfer.name}
-                      className="w-8 h-8 rounded-full object-cover shrink-0"
-                      style={{ background: "var(--gray-100)" }}
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
+                    <HeadshotImg
+                      espnId={player.espnId}
+                      name={player.name}
+                      size={32}
                     />
                     <div className="min-w-0">
                       <p
                         className="text-sm font-medium truncate"
                         style={{ color: "var(--gray-900)" }}
                       >
-                        {golfer.name}
+                        {player.name}
                       </p>
-                      <p className="text-[10px]" style={{ color: "var(--gray-400)" }}>
-                        {golfer.country} &middot; #{golfer.rank} &middot;{" "}
-                        {golfer.odds}
+                      <p
+                        className="text-[10px]"
+                        style={{ color: "var(--gray-400)" }}
+                      >
+                        {player.country}
                       </p>
                     </div>
                   </div>
                   {isMyTurn && phase === "active" && (
                     <button
-                      onClick={() => handlePick(golfer)}
+                      onClick={() => handlePick(player)}
                       disabled={picking}
                       className="ml-2 px-3 py-1 rounded-lg text-xs font-semibold text-white shrink-0"
                       style={{
@@ -661,7 +739,7 @@ export default function DraftPage() {
                   )}
                 </div>
               ))}
-              {availableGolfers.length === 0 && (
+              {availablePlayers.length === 0 && (
                 <p
                   className="text-center text-sm py-4"
                   style={{ color: "var(--gray-400)" }}

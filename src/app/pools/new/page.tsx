@@ -1,12 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../../lib/supabase/client";
 
+type Tournament = {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+};
+
 export default function CreatePoolPage() {
   const [name, setName] = useState("");
-  const [tournament, setTournament] = useState("The Masters 2026");
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState("");
+  const [selectedEventName, setSelectedEventName] = useState("");
   const [numTeams, setNumTeams] = useState(8);
   const [playersPerTeam, setPlayersPerTeam] = useState(4);
   const [draftType, setDraftType] = useState<"snake" | "regular">("snake");
@@ -19,15 +28,45 @@ export default function CreatePoolPage() {
   );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingTournaments, setLoadingTournaments] = useState(true);
   const router = useRouter();
   const supabase = createClient();
 
-  const tournaments = [
-    "The Masters 2026",
-    "PGA Championship 2026",
-    "U.S. Open 2026",
-    "The Open Championship 2026",
-  ];
+  // Fetch PGA Tour schedule from ESPN
+  useEffect(() => {
+    async function fetchTournaments() {
+      try {
+        const res = await fetch("/api/tournaments");
+        const data = await res.json();
+        if (data.tournaments?.length) {
+          setTournaments(data.tournaments);
+          // Default to the next upcoming tournament
+          const now = new Date();
+          const upcoming = data.tournaments.find(
+            (t: Tournament) => new Date(t.endDate) >= now
+          );
+          if (upcoming) {
+            setSelectedEventId(upcoming.id);
+            setSelectedEventName(upcoming.name);
+          } else {
+            setSelectedEventId(data.tournaments[0].id);
+            setSelectedEventName(data.tournaments[0].name);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load tournaments:", err);
+      } finally {
+        setLoadingTournaments(false);
+      }
+    }
+    fetchTournaments();
+  }, []);
+
+  function handleTournamentChange(eventId: string) {
+    setSelectedEventId(eventId);
+    const t = tournaments.find((t) => t.id === eventId);
+    if (t) setSelectedEventName(t.name);
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -35,11 +74,11 @@ export default function CreatePoolPage() {
     setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not logged in");
 
-      // Create the pool
-      // Build draft start time if date is set
       let draft_start_time: string | null = null;
       if (draftDate && draftTime) {
         const dt = new Date(`${draftDate}T${draftTime}`);
@@ -50,7 +89,8 @@ export default function CreatePoolPage() {
         .from("pools")
         .insert({
           name,
-          tournament,
+          tournament: selectedEventName,
+          espn_event_id: selectedEventId,
           admin_id: user.id,
           num_teams: numTeams,
           players_per_team: playersPerTeam,
@@ -64,21 +104,15 @@ export default function CreatePoolPage() {
 
       if (poolErr) throw poolErr;
 
-      // Add admin as first member
       const { error: memberErr } = await supabase
         .from("pool_members")
         .insert({ pool_id: pool.id, user_id: user.id });
-
       if (memberErr) throw memberErr;
 
-      // Create the draft record
-      const { error: draftErr } = await supabase
-        .from("drafts")
-        .insert({
-          pool_id: pool.id,
-          total_picks: numTeams * (playersPerTeam + extrasCount),
-        });
-
+      const { error: draftErr } = await supabase.from("drafts").insert({
+        pool_id: pool.id,
+        total_picks: numTeams * (playersPerTeam + extrasCount),
+      });
       if (draftErr) throw draftErr;
 
       router.push(`/pools/${pool.id}`);
@@ -91,16 +125,29 @@ export default function CreatePoolPage() {
     }
   }
 
+  function formatDate(dateStr: string) {
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  }
+
   return (
     <div className="max-w-md mx-auto px-4 py-8">
-      <h1 className="text-xl font-bold mb-6" style={{ color: "var(--gray-900)" }}>
+      <h1
+        className="text-xl font-bold mb-6"
+        style={{ color: "var(--gray-900)" }}
+      >
         Create Pool
       </h1>
 
       <form onSubmit={handleCreate} className="space-y-5">
         {/* Pool Name */}
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--gray-700)" }}
+          >
             Pool Name
           </label>
           <input
@@ -116,24 +163,38 @@ export default function CreatePoolPage() {
 
         {/* Tournament */}
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--gray-700)" }}
+          >
             Tournament
           </label>
-          <select
-            value={tournament}
-            onChange={(e) => setTournament(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border text-sm"
-            style={{ borderColor: "var(--gray-300)", background: "white" }}
-          >
-            {tournaments.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
+          {loadingTournaments ? (
+            <p className="text-sm" style={{ color: "var(--gray-400)" }}>
+              Loading PGA Tour schedule...
+            </p>
+          ) : (
+            <select
+              value={selectedEventId}
+              onChange={(e) => handleTournamentChange(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{ borderColor: "var(--gray-300)", background: "white" }}
+            >
+              {tournaments.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({formatDate(t.startDate)})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Draft Type */}
         <div>
-          <label className="block text-sm font-medium mb-2" style={{ color: "var(--gray-700)" }}>
+          <label
+            className="block text-sm font-medium mb-2"
+            style={{ color: "var(--gray-700)" }}
+          >
             Draft Type
           </label>
           <div className="flex gap-3">
@@ -144,8 +205,10 @@ export default function CreatePoolPage() {
                 onClick={() => setDraftType(type)}
                 className="flex-1 py-2 rounded-lg border text-sm font-medium transition-colors"
                 style={{
-                  borderColor: draftType === type ? "var(--green)" : "var(--gray-300)",
-                  background: draftType === type ? "var(--green)" : "white",
+                  borderColor:
+                    draftType === type ? "var(--green)" : "var(--gray-300)",
+                  background:
+                    draftType === type ? "var(--green)" : "white",
                   color: draftType === type ? "white" : "var(--gray-700)",
                 }}
               >
@@ -162,7 +225,10 @@ export default function CreatePoolPage() {
 
         {/* Number of Teams */}
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--gray-700)" }}
+          >
             Number of Teams
           </label>
           <select
@@ -172,14 +238,19 @@ export default function CreatePoolPage() {
             style={{ borderColor: "var(--gray-300)", background: "white" }}
           >
             {[2, 4, 6, 8, 10, 12].map((n) => (
-              <option key={n} value={n}>{n} teams</option>
+              <option key={n} value={n}>
+                {n} teams
+              </option>
             ))}
           </select>
         </div>
 
         {/* Players Per Team */}
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--gray-700)" }}
+          >
             Players Per Team
           </label>
           <select
@@ -189,14 +260,19 @@ export default function CreatePoolPage() {
             style={{ borderColor: "var(--gray-300)", background: "white" }}
           >
             {[3, 4, 5, 6].map((n) => (
-              <option key={n} value={n}>{n} players</option>
+              <option key={n} value={n}>
+                {n} players
+              </option>
             ))}
           </select>
         </div>
 
         {/* Extra Picks */}
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--gray-700)" }}
+          >
             Extra Picks (for withdrawals)
           </label>
           <select
@@ -206,14 +282,19 @@ export default function CreatePoolPage() {
             style={{ borderColor: "var(--gray-300)", background: "white" }}
           >
             {[0, 1, 2, 3].map((n) => (
-              <option key={n} value={n}>{n} extra{n !== 1 ? "s" : ""}</option>
+              <option key={n} value={n}>
+                {n} extra{n !== 1 ? "s" : ""}
+              </option>
             ))}
           </select>
         </div>
 
         {/* Pick Timer */}
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--gray-700)" }}
+          >
             Pick Timer
           </label>
           <select
@@ -232,7 +313,10 @@ export default function CreatePoolPage() {
 
         {/* Draft Start Time */}
         <div>
-          <label className="block text-sm font-medium mb-1" style={{ color: "var(--gray-700)" }}>
+          <label
+            className="block text-sm font-medium mb-1"
+            style={{ color: "var(--gray-700)" }}
+          >
             Draft Start Time
           </label>
           <div className="flex gap-2">
@@ -272,7 +356,9 @@ export default function CreatePoolPage() {
         </div>
 
         {error && (
-          <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+          <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+            {error}
+          </p>
         )}
 
         {/* Summary */}
@@ -280,21 +366,44 @@ export default function CreatePoolPage() {
           className="rounded-lg p-3 text-sm"
           style={{ background: "var(--gray-100)", color: "var(--gray-600)" }}
         >
-          <p className="font-medium mb-1" style={{ color: "var(--gray-700)" }}>Summary</p>
-          <p>{numTeams} teams drafting {playersPerTeam} players each ({draftType} draft)</p>
-          <p>{numTeams * (playersPerTeam + extrasCount)} total picks, {timerSeconds}s per pick</p>
+          <p
+            className="font-medium mb-1"
+            style={{ color: "var(--gray-700)" }}
+          >
+            Summary
+          </p>
+          <p>
+            {numTeams} teams drafting {playersPerTeam} players each (
+            {draftType} draft)
+          </p>
+          <p>
+            {numTeams * (playersPerTeam + extrasCount)} total picks,{" "}
+            {timerSeconds}s per pick
+          </p>
+          {selectedEventName && <p>Tournament: {selectedEventName}</p>}
           {draftDate && (
-            <p>Draft: {new Date(`${draftDate}T${draftTime}`).toLocaleString("en-US", { timeZone: draftTimezone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" })}</p>
+            <p>
+              Draft:{" "}
+              {new Date(`${draftDate}T${draftTime}`).toLocaleString("en-US", {
+                timeZone: draftTimezone,
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                timeZoneName: "short",
+              })}
+            </p>
           )}
         </div>
 
         <button
           type="submit"
-          disabled={loading || !name}
+          disabled={loading || !name || !selectedEventId}
           className="w-full py-2.5 rounded-lg text-white text-sm font-semibold"
           style={{
             background: "var(--green)",
-            opacity: loading || !name ? 0.5 : 1,
+            opacity: loading || !name || !selectedEventId ? 0.5 : 1,
           }}
         >
           {loading ? "Creating..." : "Create Pool"}

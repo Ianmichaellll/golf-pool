@@ -16,6 +16,7 @@ type PoolDetails = {
   extras_count: number;
   timer_seconds: number;
   draft_start_time: string | null;
+  espn_event_id: string | null;
   status: string;
 };
 
