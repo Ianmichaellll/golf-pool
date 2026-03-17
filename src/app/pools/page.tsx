@@ -116,45 +116,105 @@ export default function PoolsPage() {
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {pools.map((pool) => {
-            const status = statusLabel[pool.status] || statusLabel.open;
-            return (
-              <button
-                key={pool.id}
-                onClick={() => router.push(`/pools/${pool.id}`)}
-                className="w-full text-left rounded-xl border p-4 transition-shadow hover:shadow-md"
-                style={{ borderColor: "var(--gray-200)", background: "white" }}
+        <>
+          {/* Active Pools */}
+          {pools.filter((p) => p.status !== "completed").length > 0 && (
+            <div className="space-y-3 mb-8">
+              {pools
+                .filter((p) => p.status !== "completed")
+                .map((pool) => {
+                  const status = statusLabel[pool.status] || statusLabel.open;
+                  return (
+                    <button
+                      key={pool.id}
+                      onClick={() => router.push(`/pools/${pool.id}`)}
+                      className="w-full text-left rounded-xl border p-4 transition-shadow hover:shadow-md"
+                      style={{ borderColor: "var(--gray-200)", background: "white" }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h2 className="font-semibold" style={{ color: "var(--gray-900)" }}>
+                            {pool.name}
+                          </h2>
+                          <p className="text-sm mt-0.5" style={{ color: "var(--gray-500)" }}>
+                            {pool.tournament}
+                          </p>
+                        </div>
+                        <span
+                          className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                          style={{ color: status.color, background: status.bg }}
+                        >
+                          {status.text}
+                        </span>
+                      </div>
+                      <div className="flex gap-4 mt-3 text-xs" style={{ color: "var(--gray-500)" }}>
+                        <span>{pool.member_count}/{pool.num_teams} teams</span>
+                        <span>{pool.draft_type === "snake" ? "Snake" : "Regular"} draft</span>
+                        {pool.is_admin && (
+                          <span className="font-semibold" style={{ color: "var(--green)" }}>
+                            Admin
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+          )}
+
+          {/* Past Pools */}
+          {pools.filter((p) => p.status === "completed").length > 0 && (
+            <>
+              <h2
+                className="text-sm font-semibold mb-3"
+                style={{ color: "var(--gray-500)" }}
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="font-semibold" style={{ color: "var(--gray-900)" }}>
-                      {pool.name}
-                    </h2>
-                    <p className="text-sm mt-0.5" style={{ color: "var(--gray-500)" }}>
-                      {pool.tournament}
-                    </p>
-                  </div>
-                  <span
-                    className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                    style={{ color: status.color, background: status.bg }}
-                  >
-                    {status.text}
-                  </span>
-                </div>
-                <div className="flex gap-4 mt-3 text-xs" style={{ color: "var(--gray-500)" }}>
-                  <span>{pool.member_count}/{pool.num_teams} teams</span>
-                  <span>{pool.draft_type === "snake" ? "Snake" : "Regular"} draft</span>
-                  {pool.is_admin && (
-                    <span className="font-semibold" style={{ color: "var(--green)" }}>
-                      Admin
-                    </span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                Past Pools
+              </h2>
+              <div className="space-y-3">
+                {pools
+                  .filter((p) => p.status === "completed")
+                  .map((pool) => {
+                    const status = statusLabel[pool.status] || statusLabel.open;
+                    return (
+                      <button
+                        key={pool.id}
+                        onClick={() => router.push(`/pools/${pool.id}/standings`)}
+                        className="w-full text-left rounded-xl border p-4 transition-shadow hover:shadow-md"
+                        style={{ borderColor: "var(--gray-200)", background: "white" }}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h2 className="font-semibold" style={{ color: "var(--gray-900)" }}>
+                              {pool.name}
+                            </h2>
+                            <p className="text-sm mt-0.5" style={{ color: "var(--gray-500)" }}>
+                              {pool.tournament}
+                            </p>
+                          </div>
+                          <span
+                            className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                            style={{ color: status.color, background: status.bg }}
+                          >
+                            {status.text}
+                          </span>
+                        </div>
+                        <div className="flex gap-4 mt-3 text-xs" style={{ color: "var(--gray-500)" }}>
+                          <span>{pool.member_count}/{pool.num_teams} teams</span>
+                          <span>{pool.draft_type === "snake" ? "Snake" : "Regular"} draft</span>
+                          {pool.is_admin && (
+                            <span className="font-semibold" style={{ color: "var(--green)" }}>
+                              Admin
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            </>
+          )}
+        </>
       )}
     </div>
   );

@@ -82,6 +82,11 @@ export default function PoolLobbyPage() {
         router.push("/pools");
         return;
       }
+      // Completed pools go straight to standings
+      if (poolData.status === "completed") {
+        router.replace(`/pools/${poolId}/standings`);
+        return;
+      }
       setPool(poolData);
       await loadMembers();
       setLoading(false);
@@ -411,15 +416,7 @@ export default function PoolLobbyPage() {
         </div>
       )}
 
-      {pool.status === "completed" && (
-        <button
-          onClick={() => router.push(`/pools/${poolId}/standings`)}
-          className="w-full py-3 rounded-lg text-white text-sm font-semibold"
-          style={{ background: "var(--green)" }}
-        >
-          View Pool Standings
-        </button>
-      )}
+      {/* Completed pools redirect to standings in useEffect */}
 
       {isAdmin && pool.status === "open" && (
         <button

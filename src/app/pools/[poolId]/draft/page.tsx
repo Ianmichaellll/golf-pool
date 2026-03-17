@@ -136,6 +136,8 @@ export default function DraftPage() {
   const [pickTimer, setPickTimer] = useState("");
   const [queue, setQueue] = useState<string[]>([]);
   const [queueTab, setQueueTab] = useState<"available" | "queue">("available");
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const queueRef = useRef<string[]>([]);
   queueRef.current = queue;
 
@@ -393,7 +395,8 @@ export default function DraftPage() {
         !search ||
         g.name.toLowerCase().includes(search.toLowerCase()) ||
         g.country.toLowerCase().includes(search.toLowerCase())
-    );
+    )
+    .sort((a, b) => a.rank - b.rank);
 
   // ─── Make a pick (manual or auto) ───────────────────────────────────
   async function makePick(
@@ -472,6 +475,16 @@ export default function DraftPage() {
     const newQueue = [...queue];
     [newQueue[idx], newQueue[newIdx]] = [newQueue[newIdx], newQueue[idx]];
     saveQueue(newQueue);
+  }
+
+  function handleQueueDrop(toIdx: number) {
+    if (dragIdx === null || dragIdx === toIdx) return;
+    const newQueue = [...queue];
+    const [moved] = newQueue.splice(dragIdx, 1);
+    newQueue.splice(toIdx, 0, moved);
+    saveQueue(newQueue);
+    setDragIdx(null);
+    setDragOverIdx(null);
   }
 
   // ─── Auto-pick: use queue first, then highest ranked ────────────────
@@ -694,15 +707,6 @@ export default function DraftPage() {
             </p>
           </div>
         )}
-        {phase === "completed" && (
-          <button
-            onClick={() => window.location.href = `/pools/${poolId}/standings`}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ background: "var(--green)" }}
-          >
-            View Pool Standings
-          </button>
-        )}
       </div>
 
       {/* Admin Controls */}
@@ -811,7 +815,7 @@ export default function DraftPage() {
             className="mt-2 px-6 py-2 rounded-lg text-sm font-semibold"
             style={{ background: "white", color: "var(--green)" }}
           >
-            View Pool Standings
+            View Pool
           </button>
         </div>
       )}
@@ -1026,6 +1030,9 @@ export default function DraftPage() {
                             className="text-sm font-medium truncate"
                             style={{ color: "var(--gray-900)" }}
                           >
+                            <span className="text-[10px] font-normal" style={{ color: "var(--gray-400)" }}>
+                              #{player.rank}
+                            </span>{" "}
                             {player.name}
                           </p>
                           <p
@@ -1105,13 +1112,31 @@ export default function DraftPage() {
                     return (
                       <div
                         key={name}
+                        draggable={!drafted}
+                        onDragStart={() => setDragIdx(idx)}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverIdx(idx);
+                        }}
+                        onDrop={() => handleQueueDrop(idx)}
+                        onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
                         className="px-3 py-2 flex items-center justify-between border-b"
                         style={{
-                          borderColor: "var(--gray-50)",
-                          opacity: drafted ? 0.4 : 1,
+                          borderColor: dragOverIdx === idx ? "var(--green)" : "var(--gray-50)",
+                          borderTopWidth: dragOverIdx === idx ? 2 : undefined,
+                          opacity: drafted ? 0.4 : dragIdx === idx ? 0.5 : 1,
+                          cursor: drafted ? "default" : "grab",
                         }}
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {!drafted && (
+                            <span
+                              className="w-4 text-center text-[10px] shrink-0"
+                              style={{ color: "var(--gray-300)", cursor: "grab" }}
+                            >
+                              ⠿
+                            </span>
+                          )}
                           <span
                             className="w-5 text-center text-xs font-semibold shrink-0"
                             style={{ color: "var(--gray-400)" }}
@@ -1131,29 +1156,7 @@ export default function DraftPage() {
                           </p>
                         </div>
                         {!drafted && (
-                          <div className="flex items-center gap-1 ml-2 shrink-0">
-                            <button
-                              onClick={() => moveInQueue(name, "up")}
-                              disabled={idx === 0}
-                              className="w-6 h-6 flex items-center justify-center rounded text-xs"
-                              style={{
-                                color: idx === 0 ? "var(--gray-200)" : "var(--gray-500)",
-                              }}
-                              title="Move up"
-                            >
-                              ▲
-                            </button>
-                            <button
-                              onClick={() => moveInQueue(name, "down")}
-                              disabled={idx === queue.length - 1}
-                              className="w-6 h-6 flex items-center justify-center rounded text-xs"
-                              style={{
-                                color: idx === queue.length - 1 ? "var(--gray-200)" : "var(--gray-500)",
-                              }}
-                              title="Move down"
-                            >
-                              ▼
-                            </button>
+                          <div className="flex items-center ml-2 shrink-0">
                             <button
                               onClick={() => removeFromQueue(name)}
                               className="w-6 h-6 flex items-center justify-center rounded text-xs text-red-400"

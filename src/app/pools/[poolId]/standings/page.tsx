@@ -229,7 +229,7 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
             className={`grid grid-cols-12 px-3 sm:px-5 py-2 items-center border-t ${isMcWd ? "opacity-50" : ""}`}
             style={{
               borderColor: "var(--gray-50)",
-              background: entry.isPoolPlayer ? "rgba(34,197,94,0.06)" : "white",
+              background: "white",
             }}
           >
             <div
@@ -242,7 +242,6 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
               className="col-span-5 text-xs sm:text-sm truncate"
               style={{
                 color: "var(--gray-900)",
-                fontWeight: entry.isPoolPlayer ? 600 : 400,
               }}
             >
               {entry.name}
@@ -357,11 +356,11 @@ export default function PoolStandingsPage() {
       {/* Header */}
       <div className="text-center mb-8">
         <button
-          onClick={() => router.push(`/pools/${poolId}`)}
+          onClick={() => router.push("/pools")}
           className="text-sm mb-3 inline-block"
           style={{ color: "var(--green)" }}
         >
-          ← Back to Pool
+          ← My Pools
         </button>
         <h1
           className="text-2xl font-bold tracking-tight mb-1"
