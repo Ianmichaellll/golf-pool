@@ -389,12 +389,35 @@ export default function PoolLobbyPage() {
 
       {/* Actions */}
       {pool.status === "drafting" && (
+        <div className="space-y-2">
+          <button
+            onClick={() => router.push(`/pools/${poolId}/draft`)}
+            className="w-full py-3 rounded-lg text-white text-sm font-semibold"
+            style={{ background: "var(--green)" }}
+          >
+            Enter Draft
+          </button>
+          <button
+            onClick={() => router.push(`/pools/${poolId}/standings`)}
+            className="w-full py-2.5 rounded-lg text-sm font-medium border"
+            style={{
+              borderColor: "var(--gray-200)",
+              color: "var(--gray-600)",
+              background: "white",
+            }}
+          >
+            View Standings
+          </button>
+        </div>
+      )}
+
+      {pool.status === "completed" && (
         <button
-          onClick={() => router.push(`/pools/${poolId}/draft`)}
+          onClick={() => router.push(`/pools/${poolId}/standings`)}
           className="w-full py-3 rounded-lg text-white text-sm font-semibold"
           style={{ background: "var(--green)" }}
         >
-          Enter Draft
+          View Pool Standings
         </button>
       )}
 

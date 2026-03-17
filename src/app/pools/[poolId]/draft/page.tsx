@@ -534,7 +534,7 @@ export default function DraftPage() {
         )}
         {phase === "completed" && (
           <button
-            onClick={() => window.location.href = "/"}
+            onClick={() => window.location.href = `/pools/${poolId}/standings`}
             className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
             style={{ background: "var(--green)" }}
           >
@@ -595,7 +595,7 @@ export default function DraftPage() {
             Draft Complete! All {draft.total_picks} picks are in.
           </p>
           <button
-            onClick={() => window.location.href = "/"}
+            onClick={() => window.location.href = `/pools/${poolId}/standings`}
             className="mt-2 px-6 py-2 rounded-lg text-sm font-semibold"
             style={{ background: "white", color: "var(--green)" }}
           >
