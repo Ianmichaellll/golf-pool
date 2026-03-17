@@ -312,6 +312,10 @@ export default function DraftPage() {
         setPhase("completed");
         setCountdown("");
         setPickTimer("");
+      } else if (draftRef.current.status === "paused") {
+        setPhase("active");
+        setCountdown("");
+        setPickTimer("PAUSED");
       } else {
         setPhase("active");
         setCountdown("");
@@ -378,6 +382,7 @@ export default function DraftPage() {
   }, [draft, pool, actualTeams]);
 
   const isMyTurn = phase === "active" && currentPickUserId() === userId;
+  const isAdmin = userId === pool?.admin_id;
 
   // ─── Available players ─────────────────────────────────────────────
   const pickedGolfers = new Set(picks.map((p) => p.golfer_name));
@@ -517,6 +522,100 @@ export default function DraftPage() {
     }
   }
 
+  // ─── Admin Controls ────────────────────────────────────────────────
+  async function handlePauseDraft() {
+    if (!draft || !isAdmin) return;
+    const newStatus = draft.status === "paused" ? "active" : "paused";
+    const updates: Record<string, unknown> = { status: newStatus };
+    if (newStatus === "active") {
+      // Reset deadline for current pick when resuming
+      updates.current_turn_deadline = new Date(
+        Date.now() + (pool?.timer_seconds || 120) * 1000
+      ).toISOString();
+    }
+    await supabase.from("drafts").update(updates).eq("id", draft.id);
+  }
+
+  async function handleResetLastPick() {
+    if (!draft || !isAdmin || draft.current_pick === 0) return;
+    if (!confirm("Undo the last pick? This cannot be reversed.")) return;
+
+    const lastPickNum = draft.current_pick - 1;
+    const lastPick = picks.find((p) => p.pick_number === lastPickNum);
+    if (!lastPick) return;
+
+    // Delete the pick
+    await supabase
+      .from("draft_picks")
+      .delete()
+      .eq("draft_id", draft.id)
+      .eq("pick_number", lastPickNum);
+
+    // Roll back current_pick and reset deadline
+    await supabase
+      .from("drafts")
+      .update({
+        current_pick: lastPickNum,
+        status: "active",
+        current_turn_deadline: new Date(
+          Date.now() + (pool?.timer_seconds || 120) * 1000
+        ).toISOString(),
+        completed_at: null,
+      })
+      .eq("id", draft.id);
+  }
+
+  async function handleKickFromDraft(targetUserId: string) {
+    if (!isAdmin || !draft || !pool) return;
+    const name = getName(targetUserId);
+    if (!confirm(`Remove ${name} from the draft? Their picks will be auto-filled.`)) return;
+
+    // Auto-fill remaining picks for this user
+    const pickedNames = new Set(picks.map((p) => p.golfer_name));
+    const remainingSlots: number[] = [];
+    for (let i = draft.current_pick; i < draft.total_picks; i++) {
+      const uid = getPickUserId(i, draft.draft_order, actualTeams, pool.draft_type);
+      if (uid === targetUserId) remainingSlots.push(i);
+    }
+
+    // Auto-pick for each remaining slot
+    for (const pickNum of remainingSlots) {
+      const best = players.find((p) => !pickedNames.has(p.name));
+      if (!best) break;
+      pickedNames.add(best.name);
+      const round = getPickRound(pickNum, actualTeams);
+      await supabase.from("draft_picks").insert({
+        draft_id: draft.id,
+        pool_id: poolId,
+        user_id: targetUserId,
+        golfer_name: best.name,
+        pick_number: pickNum,
+        round,
+        is_auto: true,
+      });
+    }
+
+    // Advance to next non-kicked user's pick (or complete)
+    let nextPick = draft.current_pick;
+    while (nextPick < draft.total_picks) {
+      const uid = getPickUserId(nextPick, draft.draft_order, actualTeams, pool.draft_type);
+      if (uid !== targetUserId) break;
+      nextPick++;
+    }
+    const isComplete = nextPick >= draft.total_picks;
+    await supabase
+      .from("drafts")
+      .update({
+        current_pick: nextPick,
+        status: isComplete ? "completed" : "active",
+        completed_at: isComplete ? new Date().toISOString() : null,
+        current_turn_deadline: isComplete
+          ? null
+          : new Date(Date.now() + pool.timer_seconds * 1000).toISOString(),
+      })
+      .eq("id", draft.id);
+  }
+
   function getName(uid: string): string {
     return (
       members.find((m) => m.user_id === uid)?.display_name || "Unknown"
@@ -606,8 +705,45 @@ export default function DraftPage() {
         )}
       </div>
 
+      {/* Admin Controls */}
+      {isAdmin && phase === "active" && (
+        <div
+          className="rounded-lg border px-4 py-3 mb-4 flex items-center justify-between flex-wrap gap-2"
+          style={{ borderColor: "var(--gray-200)", background: "var(--gray-50)" }}
+        >
+          <span className="text-xs font-semibold" style={{ color: "var(--gray-500)" }}>
+            Admin Controls
+          </span>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={handlePauseDraft}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+              style={{
+                borderColor: draft.status === "paused" ? "var(--green)" : "var(--gray-300)",
+                background: draft.status === "paused" ? "var(--green)" : "white",
+                color: draft.status === "paused" ? "white" : "var(--gray-600)",
+              }}
+            >
+              {draft.status === "paused" ? "Resume Draft" : "Pause Draft"}
+            </button>
+            <button
+              onClick={handleResetLastPick}
+              disabled={draft.current_pick === 0}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+              style={{
+                borderColor: "var(--gray-300)",
+                background: "white",
+                color: draft.current_pick === 0 ? "var(--gray-300)" : "var(--gray-600)",
+              }}
+            >
+              Undo Last Pick
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Current pick banner */}
-      {phase === "active" && (
+      {phase === "active" && draft.status !== "paused" && (
         <div
           className="rounded-lg px-4 py-3 mb-4 text-center"
           style={{
@@ -623,6 +759,19 @@ export default function DraftPage() {
           <p className="text-xs mt-0.5" style={{ opacity: 0.8 }}>
             Round {getPickRound(draft.current_pick, actualTeams)} &middot;
             Pick #{draft.current_pick + 1}
+          </p>
+        </div>
+      )}
+
+      {/* Paused banner */}
+      {phase === "active" && draft.status === "paused" && (
+        <div
+          className="rounded-lg px-4 py-3 mb-4 text-center"
+          style={{ background: "var(--gray-200)", color: "var(--gray-600)" }}
+        >
+          <p className="text-sm font-semibold">Draft Paused</p>
+          <p className="text-xs mt-0.5">
+            {isAdmin ? "Click Resume Draft to continue." : "Waiting for admin to resume..."}
           </p>
         </div>
       )}
@@ -707,6 +856,16 @@ export default function DraftPage() {
                           >
                             (you)
                           </span>
+                        )}
+                        {isAdmin && uid !== userId && phase === "active" && (
+                          <button
+                            onClick={() => handleKickFromDraft(uid)}
+                            className="block text-[9px] mx-auto mt-0.5"
+                            style={{ color: "var(--gray-300)" }}
+                            title={`Auto-fill ${getName(uid)}'s remaining picks`}
+                          >
+                            kick
+                          </button>
                         )}
                       </th>
                     );
