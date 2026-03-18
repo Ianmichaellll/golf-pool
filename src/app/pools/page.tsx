@@ -127,7 +127,7 @@ export default function PoolsPage() {
                   return (
                     <button
                       key={pool.id}
-                      onClick={() => router.push(`/pools/${pool.id}`)}
+                      onClick={() => router.push(pool.status === "open" ? `/pools/${pool.id}` : `/pools/${pool.id}/standings`)}
                       className="w-full text-left rounded-xl border p-4 transition-shadow hover:shadow-md"
                       style={{ borderColor: "var(--gray-200)", background: "white" }}
                     >

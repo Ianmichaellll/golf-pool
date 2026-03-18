@@ -82,8 +82,8 @@ export default function PoolLobbyPage() {
         router.push("/pools");
         return;
       }
-      // Completed pools go straight to standings
-      if (poolData.status === "completed") {
+      // Non-open pools go straight to standings
+      if (poolData.status !== "open") {
         router.replace(`/pools/${poolId}/standings`);
         return;
       }
