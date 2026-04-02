@@ -212,8 +212,15 @@ export async function GET(
     }
   }
 
-  // Build position map
-  const positionMap = computePositions(competitors);
+  // Check if tournament has actually started (any player has hole-by-hole data)
+  const tournamentStarted = competitors.some(
+    (c) => c.linescores?.some((r) => r.linescores && r.linescores.length > 0)
+  );
+
+  // Build position map — only if tournament has started
+  const positionMap = tournamentStarted
+    ? computePositions(competitors)
+    : new Map<string, string>();
 
   // Match ESPN names to pool player names
   function findEspnMatch(poolPlayerName: string): ESPNCompetitor | null {
@@ -245,9 +252,9 @@ export async function GET(
       return {
         name,
         position: pos,
-        score: espn.score || "E",
-        thru: getThru(espn, currentRound),
-        today: getTodayScore(espn, currentRound),
+        score: tournamentStarted ? (espn.score || "E") : "--",
+        thru: tournamentStarted ? getThru(espn, currentRound) : "--",
+        today: tournamentStarted ? getTodayScore(espn, currentRound) : "--",
         isActive: pos !== "WD" && pos !== "DQ" && pos !== "MC",
       };
     });
@@ -294,10 +301,10 @@ export async function GET(
       allPoolPlayers.has(normalizeForMatch(c.athlete.fullName));
     return {
       name: c.athlete.displayName,
-      position: pos,
-      score: c.score || "E",
-      today: getTodayScore(c, currentRound),
-      thru: getThru(c, currentRound),
+      position: tournamentStarted ? pos : "--",
+      score: tournamentStarted ? (c.score || "E") : "--",
+      today: tournamentStarted ? getTodayScore(c, currentRound) : "--",
+      thru: tournamentStarted ? getThru(c, currentRound) : "--",
       isPoolPlayer,
     };
   });

@@ -135,7 +135,7 @@ export default function DraftPage() {
   );
   const [pickTimer, setPickTimer] = useState("");
   const [queue, setQueue] = useState<string[]>([]);
-  const [queueTab, setQueueTab] = useState<"available" | "queue">("available");
+  const [queueTab, setQueueTab] = useState<"available" | "queue" | "teams">("available");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const queueRef = useRef<string[]>([]);
@@ -433,6 +433,14 @@ export default function DraftPage() {
         completed_at: isComplete ? new Date().toISOString() : null,
       })
       .eq("id", draft.id);
+
+    // When draft completes, update pool status to "active"
+    if (isComplete) {
+      await supabase
+        .from("pools")
+        .update({ status: "active" })
+        .eq("id", pool.id);
+    }
   }
 
   async function handlePick(player: Player) {
@@ -535,6 +543,21 @@ export default function DraftPage() {
     }
   }
 
+  // ─── Catch-up: auto-pick expired turns when page loads ──────────────
+  const catchUpRan = useRef(false);
+  useEffect(() => {
+    if (catchUpRan.current || !draft || !pool || !userId || !players.length) return;
+    if (draft.status === "completed" || draft.status === "paused") return;
+    if (!draft.current_turn_deadline) return;
+
+    const deadline = new Date(draft.current_turn_deadline).getTime();
+    if (deadline < Date.now()) {
+      catchUpRan.current = true;
+      // Deadline already passed — trigger auto-pick which will cascade
+      autoPick();
+    }
+  }, [draft?.current_turn_deadline, draft?.status, players.length, userId]);
+
   // ─── Admin Controls ────────────────────────────────────────────────
   async function handlePauseDraft() {
     if (!draft || !isAdmin) return;
@@ -627,6 +650,13 @@ export default function DraftPage() {
           : new Date(Date.now() + pool.timer_seconds * 1000).toISOString(),
       })
       .eq("id", draft.id);
+
+    if (isComplete) {
+      await supabase
+        .from("pools")
+        .update({ status: "active" })
+        .eq("id", pool.id);
+    }
   }
 
   function getName(uid: string): string {
@@ -964,33 +994,32 @@ export default function DraftPage() {
             className="rounded-xl border overflow-hidden"
             style={{ borderColor: "var(--gray-200)", background: "white" }}
           >
-            {/* Tab toggle: Available / My Queue */}
+            {/* Tab toggle: Available / My Queue / Teams */}
             <div
               className="flex gap-1 p-1 border-b"
               style={{ borderColor: "var(--gray-100)", background: "var(--gray-50)" }}
             >
-              <button
-                onClick={() => setQueueTab("available")}
-                className="flex-1 py-1.5 text-xs font-medium rounded-md transition-colors"
-                style={{
-                  background: queueTab === "available" ? "white" : "transparent",
-                  color: queueTab === "available" ? "var(--gray-900)" : "var(--gray-500)",
-                  boxShadow: queueTab === "available" ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-                }}
-              >
-                Available ({availablePlayers.length})
-              </button>
-              <button
-                onClick={() => setQueueTab("queue")}
-                className="flex-1 py-1.5 text-xs font-medium rounded-md transition-colors"
-                style={{
-                  background: queueTab === "queue" ? "white" : "transparent",
-                  color: queueTab === "queue" ? "var(--gray-900)" : "var(--gray-500)",
-                  boxShadow: queueTab === "queue" ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-                }}
-              >
-                My Queue ({queue.filter((n) => !pickedGolfers.has(n)).length})
-              </button>
+              {(["available", "teams", "queue"] as const).map((tab) => {
+                const label = tab === "available"
+                  ? `Available (${availablePlayers.length})`
+                  : tab === "teams"
+                  ? "Teams"
+                  : `Queue (${queue.filter((n) => !pickedGolfers.has(n)).length})`;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setQueueTab(tab)}
+                    className="flex-1 py-1.5 text-xs font-medium rounded-md transition-colors"
+                    style={{
+                      background: queueTab === tab ? "white" : "transparent",
+                      color: queueTab === tab ? "var(--gray-900)" : "var(--gray-500)",
+                      boxShadow: queueTab === tab ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Available Players Tab */}
@@ -1091,6 +1120,58 @@ export default function DraftPage() {
                   )}
                 </div>
               </>
+            )}
+
+            {/* Teams Tab */}
+            {queueTab === "teams" && (
+              <div className="max-h-[60vh] overflow-y-auto">
+                {columnOrder.map((uid) => {
+                  const userPicks = picks.filter((p) => p.user_id === uid);
+                  const isMe = uid === userId;
+                  return (
+                    <div key={uid} className="border-b" style={{ borderColor: "var(--gray-100)" }}>
+                      <div
+                        className="px-3 py-2 flex items-center justify-between"
+                        style={{ background: isMe ? "rgba(34,139,34,0.05)" : "var(--gray-50)" }}
+                      >
+                        <span className="text-xs font-semibold" style={{ color: isMe ? "var(--green)" : "var(--gray-700)" }}>
+                          {getName(uid)}{isMe ? " (you)" : ""}
+                        </span>
+                        <span className="text-[10px]" style={{ color: "var(--gray-400)" }}>
+                          {userPicks.length}/{totalRounds} picks
+                        </span>
+                      </div>
+                      {userPicks.length === 0 ? (
+                        <p className="px-3 py-2 text-xs" style={{ color: "var(--gray-400)" }}>
+                          No picks yet
+                        </p>
+                      ) : (
+                        userPicks.map((pick) => {
+                          const player = playerMap.current.get(pick.golfer_name);
+                          return (
+                            <div
+                              key={pick.pick_number}
+                              className="px-3 py-1.5 flex items-center gap-2"
+                            >
+                              <HeadshotImg
+                                espnId={player?.espnId || 0}
+                                name={pick.golfer_name}
+                                size={24}
+                              />
+                              <span className="text-xs" style={{ color: "var(--gray-800)" }}>
+                                {pick.golfer_name}
+                              </span>
+                              {pick.is_auto && (
+                                <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>auto</span>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
 
             {/* My Queue Tab */}

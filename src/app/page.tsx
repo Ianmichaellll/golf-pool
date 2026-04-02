@@ -44,7 +44,8 @@ function LoginForm() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -60,11 +61,15 @@ function LoginForm() {
 
     try {
       if (isSignUp) {
+        if (!firstName.trim() || !lastName.trim()) {
+          throw new Error("First and last name are required");
+        }
+        const displayName = `${firstName.trim()} ${lastName.trim()}`;
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { display_name: displayName || email.split("@")[0] },
+            data: { display_name: displayName },
           },
         });
         if (error) throw error;
@@ -101,22 +106,43 @@ function LoginForm() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {isSignUp && (
-            <div>
-              <label className="block text-sm font-medium mb-1"
-                style={{ color: "var(--gray-700)" }}>
-                Display Name
-              </label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Your name"
-                className="w-full px-3 py-2 rounded-lg border text-sm"
-                style={{
-                  borderColor: "var(--gray-300)",
-                  background: "white",
-                }}
-              />
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-1"
+                  style={{ color: "var(--gray-700)" }}>
+                  First Name
+                </label>
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="First"
+                  required
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{
+                    borderColor: "var(--gray-300)",
+                    background: "white",
+                  }}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-1"
+                  style={{ color: "var(--gray-700)" }}>
+                  Last Name
+                </label>
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Last"
+                  required
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{
+                    borderColor: "var(--gray-300)",
+                    background: "white",
+                  }}
+                />
+              </div>
             </div>
           )}
 
