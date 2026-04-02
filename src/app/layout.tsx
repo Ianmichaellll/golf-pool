@@ -3,8 +3,8 @@ import "./globals.css";
 import NavBar from "./components/NavBar";
 
 export const metadata: Metadata = {
-  title: "Easy Pool",
-  description: "Live golf pool leaderboard",
+  title: "Golf Pool",
+  description: "Golf draft pool with live leaderboard",
 };
 
 export default function RootLayout({

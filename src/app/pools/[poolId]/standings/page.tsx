@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { createClient } from "../../../lib/supabase/client";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -9,8 +10,8 @@ type PlayerDisplay = {
   name: string;
   position: string;
   score: string;
-  thru: string;
-  today: string;
+  thru?: string;
+  today?: string;
   isActive: boolean;
 };
 
@@ -42,6 +43,26 @@ type APIResponse = {
   updatedAt: string;
 };
 
+type DraftPick = {
+  pick_number: number;
+  round: number;
+  user_id: string;
+  owner: string;
+  golfer_name: string;
+  is_auto: boolean;
+};
+
+type HistoryResponse = {
+  poolName: string;
+  tournament: string;
+  completedAt: string;
+  teams: TeamDisplay[];
+  draftResults: DraftPick[];
+  draftType: string;
+  numTeams: number;
+  playersPerTeam: number;
+};
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function getPositionStyle(pos: string): string {
@@ -53,21 +74,33 @@ function getPositionStyle(pos: string): string {
 
 function getScoreStyle(score: string): string {
   if (score.startsWith("-")) return "text-red-600";
-  if (score.startsWith("+")) return "";
   return "";
 }
 
 // ── Components ──────────────────────────────────────────────────────
 
-function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
-  const [open, setOpen] = useState(false);
+function TeamCard({
+  team,
+  rank,
+  isArchived,
+}: {
+  team: TeamDisplay;
+  rank: number;
+  isArchived: boolean;
+}) {
+  const [open, setOpen] = useState(rank === 1 && isArchived);
   const activePlayers = team.players.filter((p) => p.isActive);
   const wdPlayers = team.players.filter((p) => !p.isActive);
+  const isWinner = rank === 1 && isArchived;
 
   return (
     <div
       className="rounded-xl border overflow-hidden"
-      style={{ borderColor: "var(--gray-200)", background: "white" }}
+      style={{
+        borderColor: isWinner ? "var(--green)" : "var(--gray-200)",
+        background: "white",
+        boxShadow: isWinner ? "0 0 0 1px var(--green)" : undefined,
+      }}
     >
       <button
         onClick={() => setOpen(!open)}
@@ -87,6 +120,11 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
           <div className="text-left">
             <div className="font-semibold" style={{ color: "var(--gray-900)" }}>
               {team.owner}
+              {isWinner && (
+                <span className="ml-2 text-xs font-semibold" style={{ color: "var(--green)" }}>
+                  Winner
+                </span>
+              )}
             </div>
             <div className="text-xs" style={{ color: "var(--gray-400)" }}>
               {activePlayers.length} active player{activePlayers.length !== 1 ? "s" : ""}
@@ -125,77 +163,159 @@ function TeamCard({ team, rank }: { team: TeamDisplay; rank: number }) {
             className="grid grid-cols-12 px-3 sm:px-5 py-2 text-[10px] sm:text-xs uppercase tracking-wide"
             style={{ color: "var(--gray-400)" }}
           >
-            <div className="col-span-4">Player</div>
-            <div className="col-span-2 text-center">Pos</div>
-            <div className="col-span-2 text-center">Score</div>
-            <div className="col-span-2 text-center">Thru</div>
-            <div className="col-span-2 text-center">Today</div>
+            <div className={isArchived ? "col-span-6" : "col-span-4"}>Player</div>
+            <div className={isArchived ? "col-span-3" : "col-span-2"} style={{ textAlign: "center" }}>Pos</div>
+            <div className={isArchived ? "col-span-3" : "col-span-2"} style={{ textAlign: "center" }}>Score</div>
+            {!isArchived && <div className="col-span-2 text-center">Thru</div>}
+            {!isArchived && <div className="col-span-2 text-center">Today</div>}
           </div>
 
           {activePlayers.map((player) => (
             <div
               key={player.name}
-              className="grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center border-t"
+              className={`grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center border-t`}
               style={{ borderColor: "var(--gray-50)" }}
             >
               <div
-                className="col-span-4 text-xs sm:text-sm font-medium truncate"
+                className={`${isArchived ? "col-span-6" : "col-span-4"} text-xs sm:text-sm font-medium truncate`}
                 style={{ color: "var(--gray-800)" }}
               >
                 {player.name}
               </div>
               <div
-                className={`col-span-2 text-center text-xs sm:text-sm tabular-nums ${getPositionStyle(player.position)}`}
+                className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm tabular-nums ${getPositionStyle(player.position)}`}
                 style={{ color: "var(--gray-700)" }}
               >
                 {player.position}
               </div>
               <div
-                className={`col-span-2 text-center text-xs sm:text-sm font-medium tabular-nums ${getScoreStyle(player.score)}`}
+                className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm font-medium tabular-nums ${getScoreStyle(player.score)}`}
                 style={{ color: "var(--gray-700)" }}
               >
                 {player.score}
               </div>
-              <div
-                className="col-span-2 text-center text-xs sm:text-sm tabular-nums"
-                style={{ color: "var(--gray-500)" }}
-              >
-                {player.thru}
-              </div>
-              <div
-                className={`col-span-2 text-center text-xs sm:text-sm tabular-nums ${getScoreStyle(player.today)}`}
-                style={{ color: "var(--gray-700)" }}
-              >
-                {player.today}
-              </div>
+              {!isArchived && (
+                <div
+                  className="col-span-2 text-center text-xs sm:text-sm tabular-nums"
+                  style={{ color: "var(--gray-500)" }}
+                >
+                  {player.thru}
+                </div>
+              )}
+              {!isArchived && (
+                <div
+                  className={`col-span-2 text-center text-xs sm:text-sm tabular-nums ${getScoreStyle(player.today || "")}`}
+                  style={{ color: "var(--gray-700)" }}
+                >
+                  {player.today}
+                </div>
+              )}
             </div>
           ))}
 
           {wdPlayers.map((player) => (
             <div
               key={player.name}
-              className="grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center border-t"
+              className={`grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center border-t`}
               style={{ borderColor: "var(--gray-50)", background: "rgba(239,68,68,0.04)" }}
             >
-              <div className="col-span-4 text-xs sm:text-sm line-through truncate" style={{ color: "var(--gray-400)" }}>
+              <div
+                className={`${isArchived ? "col-span-6" : "col-span-4"} text-xs sm:text-sm line-through truncate`}
+                style={{ color: "var(--gray-400)" }}
+              >
                 {player.name}
               </div>
-              <div className="col-span-2 text-center text-xs sm:text-sm font-medium text-red-500">
+              <div className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm font-medium text-red-500`}>
                 {player.position}
               </div>
-              <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>
+              <div className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm`} style={{ color: "var(--gray-400)" }}>
                 {player.score}
               </div>
-              <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>
-                {player.thru}
-              </div>
-              <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>
-                {player.today}
-              </div>
+              {!isArchived && (
+                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>
+                  {player.thru}
+                </div>
+              )}
+              {!isArchived && (
+                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>
+                  {player.today}
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function DraftBoard({ picks, draftType }: { picks: DraftPick[]; draftType: string }) {
+  // Group picks by round
+  const rounds = new Map<number, DraftPick[]>();
+  for (const pick of picks) {
+    const arr = rounds.get(pick.round) || [];
+    arr.push(pick);
+    rounds.set(pick.round, arr);
+  }
+
+  return (
+    <div
+      className="rounded-xl border overflow-hidden"
+      style={{ borderColor: "var(--gray-200)", background: "white" }}
+    >
+      <div
+        className="px-5 py-3 border-b"
+        style={{ borderColor: "var(--gray-100)" }}
+      >
+        <p className="text-sm font-semibold" style={{ color: "var(--gray-900)" }}>
+          Draft Recap
+        </p>
+        <p className="text-xs" style={{ color: "var(--gray-400)" }}>
+          {draftType === "snake" ? "Snake" : "Regular"} draft &middot; {picks.length} picks
+        </p>
+      </div>
+
+      {Array.from(rounds.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([round, roundPicks]) => (
+          <div key={round}>
+            <div
+              className="px-5 py-1.5 text-[10px] uppercase tracking-wide font-semibold"
+              style={{ background: "var(--gray-50)", color: "var(--gray-400)" }}
+            >
+              Round {round}
+            </div>
+            {roundPicks.map((pick) => (
+              <div
+                key={pick.pick_number}
+                className="flex items-center justify-between px-5 py-2 border-t"
+                style={{ borderColor: "var(--gray-50)" }}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className="text-xs tabular-nums font-medium w-6 text-center"
+                    style={{ color: "var(--gray-400)" }}
+                  >
+                    {pick.pick_number}
+                  </span>
+                  <div>
+                    <span className="text-sm" style={{ color: "var(--gray-900)" }}>
+                      {pick.golfer_name}
+                    </span>
+                    {pick.is_auto && (
+                      <span className="ml-2 text-[10px]" style={{ color: "var(--gray-400)" }}>
+                        auto
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-xs" style={{ color: "var(--gray-500)" }}>
+                  {pick.owner}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
     </div>
   );
 }
@@ -240,9 +360,7 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
             </div>
             <div
               className="col-span-5 text-xs sm:text-sm truncate"
-              style={{
-                color: "var(--gray-900)",
-              }}
+              style={{ color: "var(--gray-900)" }}
             >
               {entry.name}
               {entry.isPoolPlayer && (
@@ -282,9 +400,55 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
 export default function PoolStandingsPage() {
   const { poolId } = useParams<{ poolId: string }>();
   const router = useRouter();
-  const [tab, setTab] = useState<"pool" | "leaderboard">("pool");
+  const supabase = createClient();
+
+  const [tab, setTab] = useState<"pool" | "leaderboard" | "draft">("pool");
   const [data, setData] = useState<APIResponse | null>(null);
+  const [history, setHistory] = useState<HistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [poolStatus, setPoolStatus] = useState<string>("");
+  const [finalizing, setFinalizing] = useState(false);
+
+  // Check if user is admin and get pool status
+  useEffect(() => {
+    async function checkAdmin() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: pool } = await supabase
+        .from("pools")
+        .select("admin_id, status")
+        .eq("id", poolId)
+        .single();
+
+      if (pool) {
+        setIsAdmin(pool.admin_id === user.id);
+        setPoolStatus(pool.status);
+      }
+    }
+    checkAdmin();
+  }, [poolId]);
+
+  // Try loading archived history first for completed pools
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        const res = await fetch(`/api/pools/${poolId}/history`);
+        if (res.ok) {
+          const json: HistoryResponse = await res.json();
+          setHistory(json);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // No history — fall through to live scores
+      }
+      // Not archived yet — fetch live
+      fetchScores();
+    }
+    loadHistory();
+  }, [poolId]);
 
   const fetchScores = useCallback(async () => {
     try {
@@ -299,11 +463,36 @@ export default function PoolStandingsPage() {
     }
   }, [poolId]);
 
+  // Auto-refresh only for live (non-archived) pools
   useEffect(() => {
-    fetchScores();
+    if (history) return; // archived — no polling
     const interval = setInterval(fetchScores, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [fetchScores]);
+  }, [fetchScores, history]);
+
+  async function handleFinalize() {
+    if (!confirm("Finalize this pool? This will lock in the current standings as the final results.")) return;
+    setFinalizing(true);
+    try {
+      const res = await fetch(`/api/pools/${poolId}/finalize`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error || "Failed to finalize pool");
+        return;
+      }
+      // Reload as archived
+      const histRes = await fetch(`/api/pools/${poolId}/history`);
+      if (histRes.ok) {
+        setHistory(await histRes.json());
+        setPoolStatus("completed");
+      }
+    } catch (err) {
+      alert("Failed to finalize pool. Please try again.");
+      console.error(err);
+    } finally {
+      setFinalizing(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -312,6 +501,108 @@ export default function PoolStandingsPage() {
       </div>
     );
   }
+
+  // ── Archived (completed) view ──────────────────────────────────────
+
+  if (history) {
+    const completedDate = new Date(history.completedAt).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <button
+            onClick={() => router.push("/pools")}
+            className="text-sm mb-3 inline-block"
+            style={{ color: "var(--green)" }}
+          >
+            &larr; My Pools
+          </button>
+          <h1
+            className="text-2xl font-bold tracking-tight mb-1"
+            style={{ color: "var(--gray-900)" }}
+          >
+            {history.poolName}
+          </h1>
+          <div className="text-sm mb-1" style={{ color: "var(--gray-500)" }}>
+            {history.tournament}
+          </div>
+          <div className="text-xs mb-4" style={{ color: "var(--gray-400)" }}>
+            Completed {completedDate}
+          </div>
+
+          <div
+            className="inline-flex items-center gap-2 border rounded-full px-4 py-1.5 text-sm"
+            style={{ borderColor: "var(--gray-200)", background: "white" }}
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-gray-400" />
+            </span>
+            <span style={{ color: "var(--gray-600)" }}>Final Results</span>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div
+          className="flex gap-1 rounded-lg p-1 mb-6"
+          style={{ background: "var(--gray-100)" }}
+        >
+          <button
+            onClick={() => setTab("pool")}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              tab === "pool" ? "shadow-sm" : ""
+            }`}
+            style={{
+              background: tab === "pool" ? "white" : "transparent",
+              color: tab === "pool" ? "var(--gray-900)" : "var(--gray-500)",
+            }}
+          >
+            Standings
+          </button>
+          <button
+            onClick={() => setTab("draft")}
+            className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              tab === "draft" ? "shadow-sm" : ""
+            }`}
+            style={{
+              background: tab === "draft" ? "white" : "transparent",
+              color: tab === "draft" ? "var(--gray-900)" : "var(--gray-500)",
+            }}
+          >
+            Draft Recap
+          </button>
+        </div>
+
+        {/* Standings Tab */}
+        {tab === "pool" && (
+          <>
+            <div className="space-y-4">
+              {history.teams.map((team, i) => (
+                <TeamCard key={team.id} team={team} rank={i + 1} isArchived />
+              ))}
+            </div>
+            <div className="text-center mt-8">
+              <p className="text-xs" style={{ color: "var(--gray-400)" }}>
+                Points = sum of player positions (lower is better)
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* Draft Recap Tab */}
+        {tab === "draft" && history.draftResults && (
+          <DraftBoard picks={history.draftResults} draftType={history.draftType} />
+        )}
+      </div>
+    );
+  }
+
+  // ── Live (active) view ─────────────────────────────────────────────
 
   if (!data) {
     return (
@@ -360,7 +651,7 @@ export default function PoolStandingsPage() {
           className="text-sm mb-3 inline-block"
           style={{ color: "var(--green)" }}
         >
-          ← My Pools
+          &larr; My Pools
         </button>
         <h1
           className="text-2xl font-bold tracking-tight mb-1"
@@ -466,9 +757,32 @@ export default function PoolStandingsPage() {
           )}
           <div className="space-y-4">
             {data.teams.map((team, i) => (
-              <TeamCard key={team.id} team={team} rank={i + 1} />
+              <TeamCard key={team.id} team={team} rank={i + 1} isArchived={false} />
             ))}
           </div>
+
+          {/* Finalize button for admin */}
+          {isAdmin && poolStatus === "active" && (
+            <div className="mt-6">
+              <button
+                onClick={handleFinalize}
+                disabled={finalizing}
+                className="w-full py-3 rounded-lg text-sm font-semibold border-2 transition-colors"
+                style={{
+                  borderColor: "var(--green)",
+                  color: "var(--green)",
+                  background: "white",
+                  opacity: finalizing ? 0.5 : 1,
+                }}
+              >
+                {finalizing ? "Finalizing..." : "Finalize Pool & Lock Results"}
+              </button>
+              <p className="text-center text-xs mt-2" style={{ color: "var(--gray-400)" }}>
+                Snapshots the current standings as the final results
+              </p>
+            </div>
+          )}
+
           <div className="text-center mt-8">
             <p className="text-xs" style={{ color: "var(--gray-400)" }}>
               Points = sum of player positions (lower is better) · Updates every

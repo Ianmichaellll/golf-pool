@@ -63,8 +63,8 @@ export default function NavBar() {
     router.refresh();
   }
 
-  // Don't show nav on login page
-  if (pathname === "/login") return null;
+  // Don't show nav on login/home page
+  if (pathname === "/" || pathname === "/login") return null;
 
   return (
     <nav
@@ -79,7 +79,7 @@ export default function NavBar() {
         className="text-lg font-bold"
         style={{ color: "var(--green)" }}
       >
-        Easy Pool
+        Golf Pool
       </a>
 
       <div className="flex items-center gap-3">

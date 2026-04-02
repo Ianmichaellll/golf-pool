@@ -64,7 +64,7 @@ export default function Setup() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-lg mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-1 text-center">
-          Easy Pool Setup
+          Golf Pool Setup
         </h1>
         <p className="text-gray-500 text-sm text-center mb-8">
           Create your teams, then draft players
