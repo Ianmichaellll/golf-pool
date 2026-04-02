@@ -1154,7 +1154,7 @@ export default function DraftPage() {
                           className="text-[10px]"
                           style={{ color: "var(--gray-400)" }}
                         >
-                          #{player.rank} &middot; {player.country}
+                          {player.odds || `#${player.rank}`} &middot; {player.country}
                         </p>
                       </div>
                     </button>
@@ -1205,16 +1205,8 @@ export default function DraftPage() {
                         style={{ background: "var(--gray-50)" }}
                       >
                         <div className="grid grid-cols-3 gap-2 mb-2">
-                          {player.odds && (
-                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
-                              <p style={{ color: "var(--gray-400)" }}>Odds</p>
-                              <p className="text-lg font-bold" style={{ color: "var(--green)" }}>
-                                {player.odds}
-                              </p>
-                            </div>
-                          )}
                           <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
-                            <p style={{ color: "var(--gray-400)" }}>Ranking</p>
+                            <p style={{ color: "var(--gray-400)" }}>World Rank</p>
                             <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
                               #{player.rank}
                             </p>
@@ -1225,14 +1217,12 @@ export default function DraftPage() {
                               {player.lastFinish}
                             </p>
                           </div>
-                          {!player.odds && (
-                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
-                              <p style={{ color: "var(--gray-400)" }}>Country</p>
-                              <p className="text-sm font-semibold" style={{ color: "var(--gray-900)" }}>
-                                {player.country || "--"}
-                              </p>
-                            </div>
-                          )}
+                          <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                            <p style={{ color: "var(--gray-400)" }}>Country</p>
+                            <p className="text-sm font-semibold" style={{ color: "var(--gray-900)" }}>
+                              {player.country || "--"}
+                            </p>
+                          </div>
                         </div>
                         {isLoading ? (
                           <p className="text-center py-2" style={{ color: "var(--gray-400)" }}>
