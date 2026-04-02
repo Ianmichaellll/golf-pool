@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { MASTERS_2026_FIELD, oddsToNumber } from "../../../../lib/golfers";
 
 // ESPN event scoreboard — returns competitors for a specific event
 function espnEventUrl(eventId: string) {
@@ -7,6 +8,7 @@ function espnEventUrl(eventId: string) {
 
 type ESPNCompetitor = {
   id: string;
+  order?: number;
   athlete: {
     fullName: string;
     displayName: string;
@@ -16,6 +18,16 @@ type ESPNCompetitor = {
   };
   status?: { type?: { name?: string } };
 };
+
+function normalizeForMatch(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[.\-']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export async function GET(
   _req: NextRequest,
@@ -38,13 +50,30 @@ export async function GET(
     const competition = event.competitions?.[0];
     const competitors: ESPNCompetitor[] = competition?.competitors ?? [];
 
-    const players = competitors.map((c, i) => ({
-      espnId: parseInt(c.id, 10),
-      name: c.athlete?.fullName || c.athlete?.displayName || "Unknown",
-      country: c.athlete?.flag?.alt || "",
-      rank: i + 1,
-      status: c.status?.type?.name || "active",
-    }));
+    // Build lookup from golfers.ts (name-normalized → golfer data)
+    const golferLookup = new Map(
+      MASTERS_2026_FIELD.map((g) => [normalizeForMatch(g.name), g])
+    );
+
+    const players = competitors.map((c, i) => {
+      const name = c.athlete?.fullName || c.athlete?.displayName || "Unknown";
+      const norm = normalizeForMatch(name);
+      const golfer = golferLookup.get(norm);
+
+      return {
+        espnId: parseInt(c.id, 10),
+        name,
+        country: c.athlete?.flag?.alt || golfer?.country || "",
+        rank: golfer?.rank || (c.order ?? i + 1),
+        odds: golfer?.odds || "",
+        oddsNum: golfer ? oddsToNumber(golfer.odds) : 999999,
+        worldRank: golfer?.rank || 0,
+        status: c.status?.type?.name || "active",
+      };
+    });
+
+    // Sort by odds (favorites first), then by ESPN order for unmatched
+    players.sort((a, b) => a.oddsNum - b.oddsNum);
 
     return NextResponse.json({
       players,
