@@ -47,9 +47,7 @@ type Player = {
   name: string;
   country: string;
   rank: number;
-  odds: string;
-  oddsNum: number;
-  worldRank: number;
+  lastFinish: string;
 };
 
 // ─── Headshot helper with placeholder fallback ──────────────────────
@@ -397,7 +395,7 @@ export default function DraftPage() {
         g.name.toLowerCase().includes(search.toLowerCase()) ||
         g.country.toLowerCase().includes(search.toLowerCase())
     )
-    .sort((a, b) => a.oddsNum - b.oddsNum);
+    .sort((a, b) => a.rank - b.rank);
 
   // ─── Make a pick (manual or auto) ───────────────────────────────────
   // ─── Make a pick — simple version that works for both manual and auto ──
@@ -1115,7 +1113,7 @@ export default function DraftPage() {
                           className="text-[10px]"
                           style={{ color: "var(--gray-400)" }}
                         >
-                          {player.odds || `#${player.rank}`} &middot; {player.country}
+                          #{player.rank} &middot; {player.country}
                         </p>
                       </div>
                     </button>
@@ -1163,15 +1161,15 @@ export default function DraftPage() {
                       style={{ background: "var(--gray-50)" }}
                     >
                       <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
-                        <p style={{ color: "var(--gray-400)" }}>Odds</p>
+                        <p style={{ color: "var(--gray-400)" }}>Ranking</p>
                         <p className="text-lg font-bold" style={{ color: "var(--green)" }}>
-                          {player.odds || "--"}
+                          #{player.rank}
                         </p>
                       </div>
                       <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
-                        <p style={{ color: "var(--gray-400)" }}>World Rank</p>
+                        <p style={{ color: "var(--gray-400)" }}>Last Finish</p>
                         <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
-                          {player.worldRank ? `#${player.worldRank}` : "--"}
+                          {player.lastFinish !== "--" ? player.lastFinish : "--"}
                         </p>
                       </div>
                       <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
