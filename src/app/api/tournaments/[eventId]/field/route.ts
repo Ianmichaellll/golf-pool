@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 const ESPN_BASE =
   "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard";
 
+const ODDS_API_KEY = process.env.ODDS_API_KEY || "";
+
 type ESPNCompetitor = {
   id: string;
   order?: number;
@@ -109,6 +111,45 @@ async function findPreviousEventId(
   }
 }
 
+// Fetch tournament odds from The Odds API (free tier: 500 req/month)
+// Sign up at https://the-odds-api.com — set ODDS_API_KEY env var
+async function fetchOdds(): Promise<Map<string, string>> {
+  const oddsMap = new Map<string, string>();
+  if (!ODDS_API_KEY) return oddsMap;
+
+  try {
+    // The Odds API uses sport keys like "golf_pga_tour"
+    const url = `https://api.the-odds-api.com/v4/sports/golf_pga_tour/odds/?apiKey=${ODDS_API_KEY}&regions=us&markets=outrights&oddsFormat=american`;
+    const res = await fetch(url, { next: { revalidate: 1800 } }); // cache 30 min
+    if (!res.ok) return oddsMap;
+
+    const data = await res.json();
+    // data is array of events, each with bookmakers[].markets[].outcomes[]
+    // Find the current/upcoming event (first one)
+    const event = data?.[0];
+    if (!event?.bookmakers?.length) return oddsMap;
+
+    // Use first bookmaker's outrights market
+    const bookmaker = event.bookmakers[0];
+    const market = bookmaker?.markets?.find(
+      (m: { key: string }) => m.key === "outrights"
+    );
+    if (!market?.outcomes) return oddsMap;
+
+    for (const outcome of market.outcomes) {
+      const name = normalizeForMatch(outcome.name || "");
+      const price = outcome.price;
+      // Format as American odds: positive gets +, negative stays
+      const formatted = price >= 0 ? `+${price}` : String(price);
+      oddsMap.set(name, formatted);
+    }
+  } catch (err) {
+    console.error("Odds API error:", err);
+  }
+
+  return oddsMap;
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ eventId: string }> }
@@ -116,10 +157,11 @@ export async function GET(
   const { eventId } = await params;
 
   try {
-    // 1. Fetch current event field
-    const eventRes = await fetch(`${ESPN_BASE}?event=${eventId}`, {
-      next: { revalidate: 600 },
-    });
+    // 1. Fetch current event field + odds in parallel
+    const [eventRes, oddsMap] = await Promise.all([
+      fetch(`${ESPN_BASE}?event=${eventId}`, { next: { revalidate: 600 } }),
+      fetchOdds(),
+    ]);
     if (!eventRes.ok) throw new Error(`ESPN API error: ${eventRes.status}`);
     const eventData = await eventRes.json();
 
@@ -171,6 +213,7 @@ export async function GET(
         country: c.athlete?.flag?.alt || "",
         rank: c.order ?? i + 1,
         lastFinish: lastFinishMap.get(norm) || "--",
+        odds: oddsMap.get(norm) || "",
         status: c.status?.type?.name || "active",
       };
     });

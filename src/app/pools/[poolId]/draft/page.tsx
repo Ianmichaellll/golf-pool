@@ -48,6 +48,14 @@ type Player = {
   country: string;
   rank: number;
   lastFinish: string;
+  odds: string;
+};
+
+type PlayerStats = {
+  wins: string;
+  top10s: string;
+  scoringAvg: string;
+  earnings: string;
 };
 
 // ─── Headshot helper with placeholder fallback ──────────────────────
@@ -137,6 +145,8 @@ export default function DraftPage() {
   const [queue, setQueue] = useState<string[]>([]);
   const [sideTab, setSideTab] = useState<"available" | "teams" | "queue">("available");
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
+  const [playerStats, setPlayerStats] = useState<Record<number, PlayerStats>>({});
+  const [loadingStats, setLoadingStats] = useState<Record<number, boolean>>({});
   const queueRef = useRef<string[]>([]);
   queueRef.current = queue;
 
@@ -384,6 +394,32 @@ export default function DraftPage() {
 
   const isMyTurn = phase === "active" && currentPickUserId() === userId;
   const isAdmin = userId === pool?.admin_id;
+
+  // ─── Fetch player stats on demand ──────────────────────────────────
+  async function fetchPlayerStats(espnId: number) {
+    if (playerStats[espnId] || loadingStats[espnId]) return;
+    setLoadingStats((prev) => ({ ...prev, [espnId]: true }));
+    try {
+      const res = await fetch(`/api/athletes/${espnId}/stats`);
+      const data = await res.json();
+      setPlayerStats((prev) => ({ ...prev, [espnId]: data }));
+    } catch {
+      setPlayerStats((prev) => ({
+        ...prev,
+        [espnId]: { wins: "--", top10s: "--", scoringAvg: "--", earnings: "--" },
+      }));
+    } finally {
+      setLoadingStats((prev) => ({ ...prev, [espnId]: false }));
+    }
+  }
+
+  function handleExpandPlayer(player: Player) {
+    const isExpanding = expandedPlayer !== player.name;
+    setExpandedPlayer(isExpanding ? player.name : null);
+    if (isExpanding) {
+      fetchPlayerStats(player.espnId);
+    }
+  }
 
   // ─── Available players ─────────────────────────────────────────────
   const pickedGolfers = new Set(picks.map((p) => p.golfer_name));
@@ -1094,7 +1130,7 @@ export default function DraftPage() {
                 >
                   <div className="px-3 py-2 flex items-center justify-between">
                     <button
-                      onClick={() => setExpandedPlayer(isExpanded ? null : player.name)}
+                      onClick={() => handleExpandPlayer(player)}
                       className="flex items-center gap-2 flex-1 min-w-0 text-left"
                     >
                       <HeadshotImg
@@ -1155,31 +1191,79 @@ export default function DraftPage() {
                     </div>
                   </div>
                   {/* Expanded player info */}
-                  {isExpanded && (
-                    <div
-                      className="px-3 pb-3 pt-1 grid grid-cols-3 gap-2 text-xs"
-                      style={{ background: "var(--gray-50)" }}
-                    >
-                      <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
-                        <p style={{ color: "var(--gray-400)" }}>Ranking</p>
-                        <p className="text-lg font-bold" style={{ color: "var(--green)" }}>
-                          #{player.rank}
-                        </p>
+                  {isExpanded && (() => {
+                    const stats = playerStats[player.espnId];
+                    const isLoading = loadingStats[player.espnId];
+                    return (
+                      <div
+                        className="px-3 pb-3 pt-1 text-xs"
+                        style={{ background: "var(--gray-50)" }}
+                      >
+                        <div className="grid grid-cols-3 gap-2 mb-2">
+                          {player.odds && (
+                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                              <p style={{ color: "var(--gray-400)" }}>Odds</p>
+                              <p className="text-lg font-bold" style={{ color: "var(--green)" }}>
+                                {player.odds}
+                              </p>
+                            </div>
+                          )}
+                          <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                            <p style={{ color: "var(--gray-400)" }}>Ranking</p>
+                            <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
+                              #{player.rank}
+                            </p>
+                          </div>
+                          <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                            <p style={{ color: "var(--gray-400)" }}>Last Finish</p>
+                            <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
+                              {player.lastFinish}
+                            </p>
+                          </div>
+                          {!player.odds && (
+                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                              <p style={{ color: "var(--gray-400)" }}>Country</p>
+                              <p className="text-sm font-semibold" style={{ color: "var(--gray-900)" }}>
+                                {player.country || "--"}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        {isLoading ? (
+                          <p className="text-center py-2" style={{ color: "var(--gray-400)" }}>
+                            Loading stats...
+                          </p>
+                        ) : stats ? (
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                              <p style={{ color: "var(--gray-400)" }}>Wins</p>
+                              <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
+                                {stats.wins}
+                              </p>
+                            </div>
+                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                              <p style={{ color: "var(--gray-400)" }}>Top 10s</p>
+                              <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
+                                {stats.top10s}
+                              </p>
+                            </div>
+                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                              <p style={{ color: "var(--gray-400)" }}>Avg</p>
+                              <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
+                                {stats.scoringAvg}
+                              </p>
+                            </div>
+                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                              <p style={{ color: "var(--gray-400)" }}>Earnings</p>
+                              <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
+                                {stats.earnings}
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
-                        <p style={{ color: "var(--gray-400)" }}>Last Finish</p>
-                        <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
-                          {player.lastFinish !== "--" ? player.lastFinish : "--"}
-                        </p>
-                      </div>
-                      <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
-                        <p style={{ color: "var(--gray-400)" }}>Country</p>
-                        <p className="text-sm font-semibold" style={{ color: "var(--gray-900)" }}>
-                          {player.country || "--"}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               );
             })}
