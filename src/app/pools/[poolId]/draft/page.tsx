@@ -397,21 +397,25 @@ export default function DraftPage() {
     .sort((a, b) => a.rank - b.rank);
 
   // ─── Make a pick (manual or auto) ───────────────────────────────────
+  // ─── Make a pick — simple version that works for both manual and auto ──
   async function makePick(
     golferName: string,
     forUserId: string,
-    isAuto: boolean
+    isAuto: boolean,
+    pickDraft?: Draft,
+    pickPool?: Pool,
   ) {
-    // Use refs for current state to avoid stale closures
-    const currentDraft = draftRef.current;
-    const currentPool = poolRef.current;
-    if (!currentDraft || !currentPool) return;
+    // Use passed-in values (for auto-pick from refs) or fall back to state
+    const d = pickDraft || draft;
+    const p = pickPool || pool;
+    if (!d || !p) return;
 
-    const pickNumber = currentDraft.current_pick;
-    const round = getPickRound(pickNumber, currentDraft.draft_order.length);
+    const pickNumber = d.current_pick;
+    const numTeams = d.draft_order.length;
+    const round = getPickRound(pickNumber, numTeams);
 
     const { error: pickErr } = await supabase.from("draft_picks").insert({
-      draft_id: currentDraft.id,
+      draft_id: d.id,
       pool_id: poolId,
       user_id: forUserId,
       golfer_name: golferName,
@@ -421,44 +425,27 @@ export default function DraftPage() {
     });
     if (pickErr) throw pickErr;
 
-    // Immediately update local picks state (don't wait for Realtime)
-    const newPick: Pick = { pick_number: pickNumber, user_id: forUserId, golfer_name: golferName, is_auto: isAuto };
-    setPicks((prev) => {
-      if (prev.some((p) => p.pick_number === pickNumber)) return prev;
-      return [...prev, newPick].sort((a, b) => a.pick_number - b.pick_number);
-    });
-
     const nextPick = pickNumber + 1;
-    const isComplete = nextPick >= currentDraft.total_picks;
-
-    const newDeadline = isComplete
-      ? null
-      : new Date(Date.now() + currentPool.timer_seconds * 1000).toISOString();
+    const isComplete = nextPick >= d.total_picks;
 
     await supabase
       .from("drafts")
       .update({
         current_pick: nextPick,
-        current_turn_deadline: newDeadline,
+        current_turn_deadline: isComplete
+          ? null
+          : new Date(Date.now() + p.timer_seconds * 1000).toISOString(),
         status: isComplete ? "completed" : "active",
         completed_at: isComplete ? new Date().toISOString() : null,
       })
-      .eq("id", currentDraft.id);
-
-    // Immediately update local draft state (don't wait for Realtime)
-    setDraft((prev) => prev ? {
-      ...prev,
-      current_pick: nextPick,
-      current_turn_deadline: newDeadline,
-      status: isComplete ? "completed" : "active",
-    } : prev);
+      .eq("id", d.id);
 
     // When draft completes, update pool status to "active"
     if (isComplete) {
       await supabase
         .from("pools")
         .update({ status: "active" })
-        .eq("id", currentPool.id);
+        .eq("id", p.id);
     }
   }
 
@@ -468,6 +455,7 @@ export default function DraftPage() {
     try {
       await makePick(player.name, userId!, false);
     } catch (err) {
+      alert("Pick failed — try again");
       console.error("Pick error:", err);
     } finally {
       setPicking(false);
@@ -505,6 +493,7 @@ export default function DraftPage() {
   // ─── Auto-pick: use queue first, then highest ranked ────────────────
   async function autoPick() {
     if (autoPickingRef.current) return;
+    // Use refs to get latest state (avoids stale closures in timer)
     const currentDraft = draftRef.current;
     const currentPool = poolRef.current;
     if (!currentDraft || !currentPool || !userId) return;
@@ -541,7 +530,8 @@ export default function DraftPage() {
       }
       if (!bestAvailable) return;
 
-      await makePick(bestAvailable.name, pickForUserId, true);
+      // Pass refs explicitly so makePick uses fresh state
+      await makePick(bestAvailable.name, pickForUserId, true, currentDraft, currentPool);
     } catch (err) {
       console.error("Auto-pick error:", err);
     } finally {
