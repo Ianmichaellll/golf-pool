@@ -25,11 +25,12 @@ export default function PoolsPage() {
   useEffect(() => {
     async function loadPools() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) { setLoading(false); return; }
 
+      // Single query: get pools + member count via join
       const { data: memberships } = await supabase
         .from("pool_members")
-        .select("pool_id")
+        .select("pool_id, pools(*, pool_members(count))")
         .eq("user_id", user.id);
 
       if (!memberships || memberships.length === 0) {
@@ -37,30 +38,21 @@ export default function PoolsPage() {
         return;
       }
 
-      const poolIds = memberships.map((m) => m.pool_id);
-      const { data: poolData } = await supabase
-        .from("pools")
-        .select("*")
-        .in("id", poolIds)
-        .order("created_at", { ascending: false });
+      const poolsWithInfo = memberships
+        .map((m: Record<string, unknown>) => {
+          const pool = m.pools as Record<string, unknown> | null;
+          if (!pool) return null;
+          const members = pool.pool_members as { count: number }[] | undefined;
+          return {
+            ...pool,
+            member_count: members?.[0]?.count || 0,
+            is_admin: pool.admin_id === user.id,
+          } as Pool;
+        })
+        .filter((p): p is Pool => p !== null)
+        .sort((a, b) => (b as unknown as { created_at: string }).created_at > (a as unknown as { created_at: string }).created_at ? 1 : -1);
 
-      if (poolData) {
-        const poolsWithInfo = await Promise.all(
-          poolData.map(async (pool) => {
-            const { count } = await supabase
-              .from("pool_members")
-              .select("*", { count: "exact", head: true })
-              .eq("pool_id", pool.id);
-
-            return {
-              ...pool,
-              member_count: count || 0,
-              is_admin: pool.admin_id === user.id,
-            };
-          })
-        );
-        setPools(poolsWithInfo);
-      }
+      setPools(poolsWithInfo);
       setLoading(false);
     }
     loadPools();
