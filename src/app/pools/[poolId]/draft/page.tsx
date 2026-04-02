@@ -49,6 +49,7 @@ type Player = {
   rank: number;
   lastFinish: string;
   odds: string;
+  oddsNum: number;
 };
 
 type PlayerStats = {
@@ -431,7 +432,11 @@ export default function DraftPage() {
         g.name.toLowerCase().includes(search.toLowerCase()) ||
         g.country.toLowerCase().includes(search.toLowerCase())
     )
-    .sort((a, b) => a.rank - b.rank);
+    .sort((a, b) => {
+      // Sort by odds (favorites first) when available, fall back to ESPN rank
+      if (a.oddsNum !== b.oddsNum) return a.oddsNum - b.oddsNum;
+      return a.rank - b.rank;
+    });
 
   // ─── Make a pick (manual or auto) ───────────────────────────────────
   // ─── Make a pick — simple version that works for both manual and auto ──
