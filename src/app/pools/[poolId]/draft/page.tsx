@@ -68,7 +68,6 @@ function HeadshotImg({
   const [failed, setFailed] = useState(false);
 
   if (failed || !espnId) {
-    // Generic golfer silhouette placeholder
     return (
       <span
         className={`inline-flex items-center justify-center rounded-full shrink-0 ${className}`}
@@ -135,9 +134,11 @@ export default function DraftPage() {
   );
   const [pickTimer, setPickTimer] = useState("");
   const [queue, setQueue] = useState<string[]>([]);
-  const [queueTab, setQueueTab] = useState<"available" | "queue" | "teams">("available");
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [sideTab, setSideTab] = useState<"available" | "teams" | "queue">("available");
+  const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
+  // Mobile touch drag state
+  const [touchDragIdx, setTouchDragIdx] = useState<number | null>(null);
+  const [touchOverIdx, setTouchOverIdx] = useState<number | null>(null);
   const queueRef = useRef<string[]>([]);
   queueRef.current = queue;
 
@@ -149,8 +150,10 @@ export default function DraftPage() {
   picksRef.current = picks;
   const playersRef = useRef(players);
   playersRef.current = players;
+  const poolRef = useRef(pool);
+  poolRef.current = pool;
 
-  // Player lookup by name for headshots on the board
+  // Player lookup by name for headshots
   const playerMap = useRef(new Map<string, Player>());
 
   // ─── Load initial data ─────────────────────────────────────────────
@@ -198,8 +201,7 @@ export default function DraftPage() {
       const { data: memberData } = await supabase
         .from("pool_members")
         .select("user_id, draft_position")
-        .eq("pool_id", poolId)
-        .order("draft_position");
+        .eq("pool_id", poolId);
 
       if (memberData) {
         const userIds = memberData.map((m) => m.user_id);
@@ -208,13 +210,13 @@ export default function DraftPage() {
           .select("id, display_name")
           .in("id", userIds);
 
-        const profileMap = new Map(
+        const nameMap = new Map(
           profiles?.map((p) => [p.id, p.display_name]) || []
         );
         setMembers(
           memberData.map((m) => ({
             ...m,
-            display_name: profileMap.get(m.user_id) || "Unknown",
+            display_name: nameMap.get(m.user_id) || "Unknown",
           }))
         );
       }
@@ -226,7 +228,7 @@ export default function DraftPage() {
         .order("pick_number");
       if (pickData) setPicks(pickData);
 
-      // Load pick queue
+      // Load queue
       const { data: queueData } = await supabase
         .from("pick_queues")
         .select("ranked_golfers")
@@ -370,7 +372,6 @@ export default function DraftPage() {
 
 
   // ─── Get who picks at each slot ────────────────────────────────────
-  // Use draft_order length as actual team count (may be less than pool.num_teams)
   const actualTeams = draft?.draft_order?.length || pool?.num_teams || 0;
 
   const currentPickUserId = useCallback(() => {
@@ -404,42 +405,63 @@ export default function DraftPage() {
     forUserId: string,
     isAuto: boolean
   ) {
-    if (!draft || !pool) return;
+    // Use refs for current state to avoid stale closures
+    const currentDraft = draftRef.current;
+    const currentPool = poolRef.current;
+    if (!currentDraft || !currentPool) return;
 
-    const round = getPickRound(draft.current_pick, actualTeams);
+    const pickNumber = currentDraft.current_pick;
+    const round = getPickRound(pickNumber, currentDraft.draft_order.length);
 
     const { error: pickErr } = await supabase.from("draft_picks").insert({
-      draft_id: draft.id,
+      draft_id: currentDraft.id,
       pool_id: poolId,
       user_id: forUserId,
       golfer_name: golferName,
-      pick_number: draft.current_pick,
+      pick_number: pickNumber,
       round,
       is_auto: isAuto,
     });
     if (pickErr) throw pickErr;
 
-    const nextPick = draft.current_pick + 1;
-    const isComplete = nextPick >= draft.total_picks;
+    // Immediately update local picks state (don't wait for Realtime)
+    const newPick: Pick = { pick_number: pickNumber, user_id: forUserId, golfer_name: golferName, is_auto: isAuto };
+    setPicks((prev) => {
+      if (prev.some((p) => p.pick_number === pickNumber)) return prev;
+      return [...prev, newPick].sort((a, b) => a.pick_number - b.pick_number);
+    });
+
+    const nextPick = pickNumber + 1;
+    const isComplete = nextPick >= currentDraft.total_picks;
+
+    const newDeadline = isComplete
+      ? null
+      : new Date(Date.now() + currentPool.timer_seconds * 1000).toISOString();
 
     await supabase
       .from("drafts")
       .update({
         current_pick: nextPick,
-        current_turn_deadline: isComplete
-          ? null
-          : new Date(Date.now() + pool.timer_seconds * 1000).toISOString(),
+        current_turn_deadline: newDeadline,
         status: isComplete ? "completed" : "active",
         completed_at: isComplete ? new Date().toISOString() : null,
       })
-      .eq("id", draft.id);
+      .eq("id", currentDraft.id);
+
+    // Immediately update local draft state (don't wait for Realtime)
+    setDraft((prev) => prev ? {
+      ...prev,
+      current_pick: nextPick,
+      current_turn_deadline: newDeadline,
+      status: isComplete ? "completed" : "active",
+    } : prev);
 
     // When draft completes, update pool status to "active"
     if (isComplete) {
       await supabase
         .from("pools")
         .update({ status: "active" })
-        .eq("id", pool.id);
+        .eq("id", currentPool.id);
     }
   }
 
@@ -475,31 +497,19 @@ export default function DraftPage() {
     saveQueue(queue.filter((n) => n !== playerName));
   }
 
-  function moveInQueue(playerName: string, direction: "up" | "down") {
-    const idx = queue.indexOf(playerName);
-    if (idx === -1) return;
-    const newIdx = direction === "up" ? idx - 1 : idx + 1;
-    if (newIdx < 0 || newIdx >= queue.length) return;
+  function moveInQueue(from: number, to: number) {
+    if (from === to) return;
     const newQueue = [...queue];
-    [newQueue[idx], newQueue[newIdx]] = [newQueue[newIdx], newQueue[idx]];
+    const [moved] = newQueue.splice(from, 1);
+    newQueue.splice(to, 0, moved);
     saveQueue(newQueue);
-  }
-
-  function handleQueueDrop(toIdx: number) {
-    if (dragIdx === null || dragIdx === toIdx) return;
-    const newQueue = [...queue];
-    const [moved] = newQueue.splice(dragIdx, 1);
-    newQueue.splice(toIdx, 0, moved);
-    saveQueue(newQueue);
-    setDragIdx(null);
-    setDragOverIdx(null);
   }
 
   // ─── Auto-pick: use queue first, then highest ranked ────────────────
   async function autoPick() {
     if (autoPickingRef.current) return;
     const currentDraft = draftRef.current;
-    const currentPool = pool;
+    const currentPool = poolRef.current;
     if (!currentDraft || !currentPool || !userId) return;
     if (currentDraft.status === "completed") return;
 
@@ -508,7 +518,6 @@ export default function DraftPage() {
     try {
       const pickedNames = new Set(picksRef.current.map((p) => p.golfer_name));
 
-      // Check queue first for the picking user
       const pickForUserId = getPickUserId(
         currentDraft.current_pick,
         currentDraft.draft_order,
@@ -518,7 +527,7 @@ export default function DraftPage() {
 
       let bestAvailable: Player | undefined;
 
-      // If this auto-pick is for a user with a queue, use their queue priority
+      // If this auto-pick is for current user, check their queue
       if (pickForUserId === userId) {
         const myQueue = queueRef.current;
         const queuePick = myQueue.find((name) => !pickedNames.has(name));
@@ -549,11 +558,15 @@ export default function DraftPage() {
     if (catchUpRan.current || !draft || !pool || !userId || !players.length) return;
     if (draft.status === "completed" || draft.status === "paused") return;
     if (!draft.current_turn_deadline) return;
+    if (!draft.started_at) return;
+
+    // Only catch up if draft has actually started (past the pre-draft countdown)
+    const startTime = new Date(draft.started_at).getTime();
+    if (startTime > Date.now()) return;
 
     const deadline = new Date(draft.current_turn_deadline).getTime();
     if (deadline < Date.now()) {
       catchUpRan.current = true;
-      // Deadline already passed — trigger auto-pick which will cascade
       autoPick();
     }
   }, [draft?.current_turn_deadline, draft?.status, players.length, userId]);
@@ -564,7 +577,6 @@ export default function DraftPage() {
     const newStatus = draft.status === "paused" ? "active" : "paused";
     const updates: Record<string, unknown> = { status: newStatus };
     if (newStatus === "active") {
-      // Reset deadline for current pick when resuming
       updates.current_turn_deadline = new Date(
         Date.now() + (pool?.timer_seconds || 120) * 1000
       ).toISOString();
@@ -577,17 +589,13 @@ export default function DraftPage() {
     if (!confirm("Undo the last pick? This cannot be reversed.")) return;
 
     const lastPickNum = draft.current_pick - 1;
-    const lastPick = picks.find((p) => p.pick_number === lastPickNum);
-    if (!lastPick) return;
 
-    // Delete the pick
     await supabase
       .from("draft_picks")
       .delete()
       .eq("draft_id", draft.id)
       .eq("pick_number", lastPickNum);
 
-    // Roll back current_pick and reset deadline
     await supabase
       .from("drafts")
       .update({
@@ -606,7 +614,6 @@ export default function DraftPage() {
     const name = getName(targetUserId);
     if (!confirm(`Remove ${name} from the draft? Their picks will be auto-filled.`)) return;
 
-    // Auto-fill remaining picks for this user
     const pickedNames = new Set(picks.map((p) => p.golfer_name));
     const remainingSlots: number[] = [];
     for (let i = draft.current_pick; i < draft.total_picks; i++) {
@@ -614,7 +621,6 @@ export default function DraftPage() {
       if (uid === targetUserId) remainingSlots.push(i);
     }
 
-    // Auto-pick for each remaining slot
     for (const pickNum of remainingSlots) {
       const best = players.find((p) => !pickedNames.has(p.name));
       if (!best) break;
@@ -631,7 +637,6 @@ export default function DraftPage() {
       });
     }
 
-    // Advance to next non-kicked user's pick (or complete)
     let nextPick = draft.current_pick;
     while (nextPick < draft.total_picks) {
       const uid = getPickUserId(nextPick, draft.draft_order, actualTeams, pool.draft_type);
@@ -685,7 +690,7 @@ export default function DraftPage() {
   const totalRounds = pool.players_per_team + pool.extras_count;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
+    <div className="max-w-2xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -728,7 +733,7 @@ export default function DraftPage() {
               className="text-2xl font-bold tabular-nums"
               style={{
                 color:
-                  pickTimer && parseInt(pickTimer) === 0
+                  pickTimer === "0:00"
                     ? "red"
                     : "var(--green)",
               }}
@@ -746,7 +751,7 @@ export default function DraftPage() {
           style={{ borderColor: "var(--gray-200)", background: "var(--gray-50)" }}
         >
           <span className="text-xs font-semibold" style={{ color: "var(--gray-500)" }}>
-            Admin Controls
+            Admin
           </span>
           <div className="flex gap-2 flex-wrap">
             <button
@@ -758,7 +763,7 @@ export default function DraftPage() {
                 color: draft.status === "paused" ? "white" : "var(--gray-600)",
               }}
             >
-              {draft.status === "paused" ? "Resume Draft" : "Pause Draft"}
+              {draft.status === "paused" ? "Resume" : "Pause"}
             </button>
             <button
               onClick={handleResetLastPick}
@@ -770,7 +775,7 @@ export default function DraftPage() {
                 color: draft.current_pick === 0 ? "var(--gray-300)" : "var(--gray-600)",
               }}
             >
-              Undo Last Pick
+              Undo Pick
             </button>
           </div>
         </div>
@@ -805,7 +810,7 @@ export default function DraftPage() {
         >
           <p className="text-sm font-semibold">Draft Paused</p>
           <p className="text-xs mt-0.5">
-            {isAdmin ? "Click Resume Draft to continue." : "Waiting for admin to resume..."}
+            {isAdmin ? "Click Resume to continue." : "Waiting for admin to resume..."}
           </p>
         </div>
       )}
@@ -850,457 +855,507 @@ export default function DraftPage() {
         </div>
       )}
 
-      <div className="flex gap-4 flex-col lg:flex-row">
-        {/* Draft Board */}
-        <div className="flex-1 overflow-x-auto">
-          <div
-            className="rounded-xl border overflow-hidden"
-            style={{ borderColor: "var(--gray-200)", background: "white" }}
-          >
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ background: "var(--gray-50)" }}>
-                  <th
-                    className="px-2 py-2 text-left font-medium"
-                    style={{ color: "var(--gray-500)" }}
+      {/* Draft Board */}
+      <div className="mb-4 overflow-x-auto">
+        <div
+          className="rounded-xl border overflow-hidden"
+          style={{ borderColor: "var(--gray-200)", background: "white" }}
+        >
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: "var(--gray-50)" }}>
+                <th
+                  className="px-2 py-2 text-left font-medium"
+                  style={{ color: "var(--gray-500)" }}
+                >
+                  Rd
+                </th>
+                {columnOrder.map((uid) => {
+                  const isCurrentPicker =
+                    phase === "active" && currentPickUserId() === uid;
+                  return (
+                    <th
+                      key={uid}
+                      className="px-2 py-2 text-center font-medium"
+                      style={{
+                        color: isCurrentPicker
+                          ? "var(--green)"
+                          : uid === userId
+                          ? "var(--gray-900)"
+                          : "var(--gray-500)",
+                        minWidth: 80,
+                      }}
+                    >
+                      {getName(uid)}
+                      {uid === userId && (
+                        <span
+                          className="block text-[10px]"
+                          style={{ color: "var(--green)" }}
+                        >
+                          (you)
+                        </span>
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: totalRounds }).map((_, roundIdx) => (
+                <tr
+                  key={roundIdx}
+                  className="border-t"
+                  style={{ borderColor: "var(--gray-100)" }}
+                >
+                  <td
+                    className="px-2 py-2 font-medium"
+                    style={{ color: "var(--gray-400)" }}
                   >
-                    Rd
-                  </th>
-                  {columnOrder.map((uid) => {
-                    const isCurrentPicker =
-                      phase === "active" && currentPickUserId() === uid;
+                    {roundIdx + 1}
+                  </td>
+                  {columnOrder.map((uid, colIdx) => {
+                    const pickNum =
+                      pool.draft_type === "snake" && roundIdx % 2 === 1
+                        ? roundIdx * actualTeams +
+                          (actualTeams - 1 - colIdx)
+                        : roundIdx * actualTeams + colIdx;
+
+                    const pick = picks.find(
+                      (p) => p.pick_number === pickNum
+                    );
+                    const isCurrent =
+                      phase === "active" &&
+                      draft.current_pick === pickNum;
+                    const pickedPlayer = pick
+                      ? playerMap.current.get(pick.golfer_name)
+                      : null;
+
                     return (
-                      <th
-                        key={uid}
-                        className="px-2 py-2 text-center font-medium"
+                      <td
+                        key={`${roundIdx}-${uid}`}
+                        className="px-2 py-2 text-center"
                         style={{
-                          color: isCurrentPicker
-                            ? "var(--green)"
-                            : uid === userId
+                          background: isCurrent
+                            ? "rgba(34, 139, 34, 0.08)"
+                            : pick
+                            ? "var(--gray-50)"
+                            : "white",
+                          color: pick
                             ? "var(--gray-900)"
-                            : "var(--gray-500)",
-                          minWidth: 80,
+                            : "var(--gray-300)",
                         }}
                       >
-                        {getName(uid)}
-                        {uid === userId && (
+                        {pick ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <HeadshotImg
+                              espnId={pickedPlayer?.espnId || 0}
+                              name={pick.golfer_name}
+                              size={24}
+                            />
+                            <span className="text-xs font-medium leading-tight">
+                              {pick.golfer_name.split(" ").pop()}
+                            </span>
+                            {pick.is_auto && (
+                              <span
+                                className="text-[9px]"
+                                style={{ color: "var(--gray-400)" }}
+                              >
+                                auto
+                              </span>
+                            )}
+                          </div>
+                        ) : isCurrent ? (
                           <span
-                            className="block text-[10px]"
-                            style={{ color: "var(--green)" }}
-                          >
-                            (you)
-                          </span>
+                            className="inline-block w-2 h-2 rounded-full animate-pulse"
+                            style={{ background: "var(--green)" }}
+                          />
+                        ) : (
+                          "—"
                         )}
-                        {isAdmin && uid !== userId && phase === "active" && (
-                          <button
-                            onClick={() => handleKickFromDraft(uid)}
-                            className="block text-[9px] mx-auto mt-0.5"
-                            style={{ color: "var(--gray-300)" }}
-                            title={`Auto-fill ${getName(uid)}'s remaining picks`}
-                          >
-                            kick
-                          </button>
-                        )}
-                      </th>
+                      </td>
                     );
                   })}
                 </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: totalRounds }).map((_, roundIdx) => (
-                  <tr
-                    key={roundIdx}
-                    className="border-t"
-                    style={{ borderColor: "var(--gray-100)" }}
-                  >
-                    <td
-                      className="px-2 py-2 font-medium"
-                      style={{ color: "var(--gray-400)" }}
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Tab toggle: Available / Teams / Queue */}
+      <div
+        className="flex gap-1 p-1 rounded-xl border mb-4"
+        style={{ borderColor: "var(--gray-200)", background: "var(--gray-50)" }}
+      >
+        {(["available", "teams", "queue"] as const).map((tab) => {
+          const label = tab === "available"
+            ? `Available (${availablePlayers.length})`
+            : tab === "teams"
+            ? "Teams"
+            : `Queue (${queue.filter((n) => !pickedGolfers.has(n)).length})`;
+          return (
+            <button
+              key={tab}
+              onClick={() => setSideTab(tab)}
+              className="flex-1 py-2 text-sm font-medium rounded-lg transition-colors"
+              style={{
+                background: sideTab === tab ? "white" : "transparent",
+                color: sideTab === tab ? "var(--gray-900)" : "var(--gray-500)",
+                boxShadow: sideTab === tab ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Available Players Tab */}
+      {sideTab === "available" && (
+        <div
+          className="rounded-xl border overflow-hidden"
+          style={{ borderColor: "var(--gray-200)", background: "white" }}
+        >
+          <div
+            className="px-3 py-2 border-b"
+            style={{ borderColor: "var(--gray-100)" }}
+          >
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search players..."
+              className="w-full px-2 py-1.5 rounded-lg border text-sm"
+              style={{
+                borderColor: "var(--gray-200)",
+                background: "var(--gray-50)",
+              }}
+            />
+          </div>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {availablePlayers.map((player) => {
+              const isExpanded = expandedPlayer === player.name;
+              return (
+                <div
+                  key={player.espnId}
+                  className="border-b"
+                  style={{ borderColor: "var(--gray-50)" }}
+                >
+                  <div className="px-3 py-2 flex items-center justify-between">
+                    <button
+                      onClick={() => setExpandedPlayer(isExpanded ? null : player.name)}
+                      className="flex items-center gap-2 flex-1 min-w-0 text-left"
                     >
-                      {roundIdx + 1}
-                    </td>
-                    {columnOrder.map((uid, colIdx) => {
-                      const pickNum =
-                        pool.draft_type === "snake" && roundIdx % 2 === 1
-                          ? roundIdx * actualTeams +
-                            (actualTeams - 1 - colIdx)
-                          : roundIdx * actualTeams + colIdx;
-
-                      const pick = picks.find(
-                        (p) => p.pick_number === pickNum
-                      );
-                      const isCurrent =
-                        phase === "active" &&
-                        draft.current_pick === pickNum;
-                      const pickedPlayer = pick
-                        ? playerMap.current.get(pick.golfer_name)
-                        : null;
-
-                      return (
-                        <td
-                          key={`${roundIdx}-${uid}`}
-                          className="px-2 py-2 text-center"
+                      <HeadshotImg
+                        espnId={player.espnId}
+                        name={player.name}
+                        size={32}
+                      />
+                      <div className="min-w-0">
+                        <p
+                          className="text-sm font-medium truncate"
+                          style={{ color: "var(--gray-900)" }}
+                        >
+                          {player.name}
+                        </p>
+                        <p
+                          className="text-[10px]"
+                          style={{ color: "var(--gray-400)" }}
+                        >
+                          #{player.rank} &middot; {player.country}
+                        </p>
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                      {!queue.includes(player.name) && (
+                        <button
+                          onClick={() => addToQueue(player.name)}
+                          className="px-2 py-1 rounded text-[10px] font-semibold border"
                           style={{
-                            background: isCurrent
-                              ? "rgba(34, 139, 34, 0.08)"
-                              : pick
-                              ? "var(--gray-50)"
-                              : "white",
-                            color: pick
-                              ? "var(--gray-900)"
-                              : "var(--gray-300)",
+                            borderColor: "var(--gray-200)",
+                            color: "var(--gray-500)",
+                          }}
+                          title="Add to queue"
+                        >
+                          +Q
+                        </button>
+                      )}
+                      {queue.includes(player.name) && (
+                        <span
+                          className="px-2 py-1 text-[10px] font-medium"
+                          style={{ color: "var(--green)" }}
+                        >
+                          #{queue.indexOf(player.name) + 1}
+                        </span>
+                      )}
+                      {isMyTurn && phase === "active" && (
+                        <button
+                          onClick={() => handlePick(player)}
+                          disabled={picking}
+                          className="px-3 py-1 rounded-lg text-xs font-semibold text-white"
+                          style={{
+                            background: "var(--green)",
+                            opacity: picking ? 0.5 : 1,
                           }}
                         >
-                          {pick ? (
-                            <div className="flex flex-col items-center gap-0.5">
-                              <HeadshotImg
-                                espnId={pickedPlayer?.espnId || 0}
-                                name={pick.golfer_name}
-                                size={24}
-                              />
-                              <span className="text-xs font-medium leading-tight">
-                                {pick.golfer_name.split(" ").pop()}
-                              </span>
-                              {pick.is_auto && (
-                                <span
-                                  className="text-[9px]"
-                                  style={{ color: "var(--gray-400)" }}
-                                >
-                                  auto
-                                </span>
-                              )}
-                            </div>
-                          ) : isCurrent ? (
-                            <span
-                              className="inline-block w-2 h-2 rounded-full animate-pulse"
-                              style={{ background: "var(--green)" }}
-                            />
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Player List */}
-        <div className="lg:w-80 shrink-0">
-          <div
-            className="rounded-xl border overflow-hidden"
-            style={{ borderColor: "var(--gray-200)", background: "white" }}
-          >
-            {/* Tab toggle: Available / My Queue / Teams */}
-            <div
-              className="flex gap-1 p-1 border-b"
-              style={{ borderColor: "var(--gray-100)", background: "var(--gray-50)" }}
-            >
-              {(["available", "teams", "queue"] as const).map((tab) => {
-                const label = tab === "available"
-                  ? `Available (${availablePlayers.length})`
-                  : tab === "teams"
-                  ? "Teams"
-                  : `Queue (${queue.filter((n) => !pickedGolfers.has(n)).length})`;
-                return (
-                  <button
-                    key={tab}
-                    onClick={() => setQueueTab(tab)}
-                    className="flex-1 py-1.5 text-xs font-medium rounded-md transition-colors"
-                    style={{
-                      background: queueTab === tab ? "white" : "transparent",
-                      color: queueTab === tab ? "var(--gray-900)" : "var(--gray-500)",
-                      boxShadow: queueTab === tab ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Available Players Tab */}
-            {queueTab === "available" && (
-              <>
-                <div
-                  className="px-3 py-2 border-b"
-                  style={{ borderColor: "var(--gray-100)" }}
-                >
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search players..."
-                    className="w-full px-2 py-1.5 rounded-lg border text-sm"
-                    style={{
-                      borderColor: "var(--gray-200)",
-                      background: "var(--gray-50)",
-                    }}
-                  />
-                </div>
-                <div className="max-h-[60vh] overflow-y-auto">
-                  {availablePlayers.map((player) => (
-                    <div
-                      key={player.espnId}
-                      className="px-3 py-2 flex items-center justify-between border-b"
-                      style={{ borderColor: "var(--gray-50)" }}
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <HeadshotImg
-                          espnId={player.espnId}
-                          name={player.name}
-                          size={32}
-                        />
-                        <div className="min-w-0">
-                          <p
-                            className="text-sm font-medium truncate"
-                            style={{ color: "var(--gray-900)" }}
-                          >
-                            <span className="text-[10px] font-normal" style={{ color: "var(--gray-400)" }}>
-                              #{player.rank}
-                            </span>{" "}
-                            {player.name}
-                          </p>
-                          <p
-                            className="text-[10px]"
-                            style={{ color: "var(--gray-400)" }}
-                          >
-                            {player.country}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                        {!queue.includes(player.name) && (
-                          <button
-                            onClick={() => addToQueue(player.name)}
-                            className="px-2 py-1 rounded text-[10px] font-semibold border"
-                            style={{
-                              borderColor: "var(--gray-200)",
-                              color: "var(--gray-500)",
-                            }}
-                            title="Add to queue"
-                          >
-                            +Q
-                          </button>
-                        )}
-                        {queue.includes(player.name) && (
-                          <span
-                            className="px-2 py-1 text-[10px] font-medium"
-                            style={{ color: "var(--green)" }}
-                          >
-                            #{queue.indexOf(player.name) + 1}
-                          </span>
-                        )}
-                        {isMyTurn && phase === "active" && (
-                          <button
-                            onClick={() => handlePick(player)}
-                            disabled={picking}
-                            className="px-3 py-1 rounded-lg text-xs font-semibold text-white"
-                            style={{
-                              background: "var(--green)",
-                              opacity: picking ? 0.5 : 1,
-                            }}
-                          >
-                            {picking ? "..." : "Pick"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {availablePlayers.length === 0 && (
-                    <p
-                      className="text-center text-sm py-4"
-                      style={{ color: "var(--gray-400)" }}
-                    >
-                      {search ? "No matching players" : "All players drafted"}
-                    </p>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Teams Tab */}
-            {queueTab === "teams" && (
-              <div className="max-h-[60vh] overflow-y-auto">
-                {columnOrder.map((uid) => {
-                  const userPicks = picks.filter((p) => p.user_id === uid);
-                  const isMe = uid === userId;
-                  return (
-                    <div key={uid} className="border-b" style={{ borderColor: "var(--gray-100)" }}>
-                      <div
-                        className="px-3 py-2 flex items-center justify-between"
-                        style={{ background: isMe ? "rgba(34,139,34,0.05)" : "var(--gray-50)" }}
-                      >
-                        <span className="text-xs font-semibold" style={{ color: isMe ? "var(--green)" : "var(--gray-700)" }}>
-                          {getName(uid)}{isMe ? " (you)" : ""}
-                        </span>
-                        <span className="text-[10px]" style={{ color: "var(--gray-400)" }}>
-                          {userPicks.length}/{totalRounds} picks
-                        </span>
-                      </div>
-                      {userPicks.length === 0 ? (
-                        <p className="px-3 py-2 text-xs" style={{ color: "var(--gray-400)" }}>
-                          No picks yet
-                        </p>
-                      ) : (
-                        userPicks.map((pick) => {
-                          const player = playerMap.current.get(pick.golfer_name);
-                          return (
-                            <div
-                              key={pick.pick_number}
-                              className="px-3 py-1.5 flex items-center gap-2"
-                            >
-                              <HeadshotImg
-                                espnId={player?.espnId || 0}
-                                name={pick.golfer_name}
-                                size={24}
-                              />
-                              <span className="text-xs" style={{ color: "var(--gray-800)" }}>
-                                {pick.golfer_name}
-                              </span>
-                              {pick.is_auto && (
-                                <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>auto</span>
-                              )}
-                            </div>
-                          );
-                        })
+                          {picking ? "..." : "Pick"}
+                        </button>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* My Queue Tab */}
-            {queueTab === "queue" && (
-              <div className="max-h-[60vh] overflow-y-auto">
-                {queue.length === 0 ? (
-                  <div className="px-4 py-8 text-center">
-                    <p className="text-sm" style={{ color: "var(--gray-400)" }}>
-                      No players queued yet.
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: "var(--gray-400)" }}>
-                      Add players from the Available tab to set your auto-pick priority.
-                    </p>
                   </div>
-                ) : (
-                  queue.map((name, idx) => {
-                    const drafted = pickedGolfers.has(name);
-                    const player = playerMap.current.get(name);
-                    return (
-                      <div
-                        key={name}
-                        draggable={!drafted}
-                        onDragStart={() => setDragIdx(idx)}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          setDragOverIdx(idx);
-                        }}
-                        onDrop={() => handleQueueDrop(idx)}
-                        onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
-                        className="px-3 py-2 flex items-center justify-between border-b"
-                        style={{
-                          borderColor: dragOverIdx === idx ? "var(--green)" : "var(--gray-50)",
-                          borderTopWidth: dragOverIdx === idx ? 2 : undefined,
-                          opacity: drafted ? 0.4 : dragIdx === idx ? 0.5 : 1,
-                          cursor: drafted ? "default" : "grab",
-                        }}
+                  {/* Expanded player info */}
+                  {isExpanded && (
+                    <div
+                      className="px-3 pb-3 pt-1 grid grid-cols-3 gap-2 text-xs"
+                      style={{ background: "var(--gray-50)" }}
+                    >
+                      <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                        <p style={{ color: "var(--gray-400)" }}>Field Rank</p>
+                        <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
+                          #{player.rank}
+                        </p>
+                      </div>
+                      <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                        <p style={{ color: "var(--gray-400)" }}>Country</p>
+                        <p className="text-sm font-semibold" style={{ color: "var(--gray-900)" }}>
+                          {player.country || "--"}
+                        </p>
+                      </div>
+                      <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                        <p style={{ color: "var(--gray-400)" }}>ESPN ID</p>
+                        <p className="text-sm font-semibold" style={{ color: "var(--gray-900)" }}>
+                          {player.espnId}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {availablePlayers.length === 0 && (
+              <p
+                className="text-center text-sm py-4"
+                style={{ color: "var(--gray-400)" }}
+              >
+                {search ? "No matching players" : "All players drafted"}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Teams Tab */}
+      {sideTab === "teams" && (
+        <div
+          className="rounded-xl border overflow-hidden"
+          style={{ borderColor: "var(--gray-200)", background: "white" }}
+        >
+          <div className="max-h-[60vh] overflow-y-auto">
+            {columnOrder.map((uid) => {
+              const userPicks = picks.filter((p) => p.user_id === uid);
+              const isMe = uid === userId;
+              const isCurrent = phase === "active" && currentPickUserId() === uid;
+              return (
+                <div key={uid} className="border-b" style={{ borderColor: "var(--gray-100)" }}>
+                  <div
+                    className="px-3 py-2 flex items-center justify-between"
+                    style={{
+                      background: isCurrent
+                        ? "rgba(34,139,34,0.1)"
+                        : isMe
+                        ? "rgba(34,139,34,0.03)"
+                        : "var(--gray-50)",
+                    }}
+                  >
+                    <span className="text-xs font-semibold" style={{ color: isMe ? "var(--green)" : "var(--gray-700)" }}>
+                      {getName(uid)}{isMe ? " (you)" : ""}
+                      {isCurrent && (
+                        <span className="ml-1.5 text-[10px] font-normal" style={{ color: "var(--green)" }}>
+                          picking...
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[10px]" style={{ color: "var(--gray-400)" }}>
+                      {userPicks.length}/{totalRounds}
+                    </span>
+                    {isAdmin && uid !== userId && phase === "active" && (
+                      <button
+                        onClick={() => handleKickFromDraft(uid)}
+                        className="text-[9px] ml-2"
+                        style={{ color: "var(--gray-300)" }}
+                        title={`Auto-fill ${getName(uid)}'s remaining picks`}
                       >
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          {!drafted && (
-                            <span
-                              className="w-4 text-center text-[10px] shrink-0"
-                              style={{ color: "var(--gray-300)", cursor: "grab" }}
-                            >
-                              ⠿
-                            </span>
-                          )}
-                          <span
-                            className="w-5 text-center text-xs font-semibold shrink-0"
-                            style={{ color: "var(--gray-400)" }}
-                          >
-                            {idx + 1}
+                        kick
+                      </button>
+                    )}
+                  </div>
+                  {userPicks.length === 0 ? (
+                    <p className="px-3 py-2 text-xs" style={{ color: "var(--gray-400)" }}>
+                      No picks yet
+                    </p>
+                  ) : (
+                    userPicks.map((pick, i) => {
+                      const player = playerMap.current.get(pick.golfer_name);
+                      return (
+                        <div
+                          key={pick.pick_number}
+                          className="px-3 py-1.5 flex items-center gap-2"
+                        >
+                          <span className="text-[10px] w-4 text-center" style={{ color: "var(--gray-400)" }}>
+                            {i + 1}
                           </span>
                           <HeadshotImg
                             espnId={player?.espnId || 0}
-                            name={name}
-                            size={28}
+                            name={pick.golfer_name}
+                            size={24}
                           />
-                          <p
-                            className={`text-sm font-medium truncate ${drafted ? "line-through" : ""}`}
-                            style={{ color: drafted ? "var(--gray-400)" : "var(--gray-900)" }}
-                          >
-                            {name}
-                          </p>
+                          <span className="text-xs" style={{ color: "var(--gray-800)" }}>
+                            {pick.golfer_name}
+                          </span>
+                          {pick.is_auto && (
+                            <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>auto</span>
+                          )}
                         </div>
-                        {!drafted && (
-                          <div className="flex items-center ml-2 shrink-0">
-                            <button
-                              onClick={() => removeFromQueue(name)}
-                              className="w-6 h-6 flex items-center justify-center rounded text-xs text-red-400"
-                              title="Remove"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
+                      );
+                    })
+                  )}
+                </div>
+              );
+            })}
           </div>
+        </div>
+      )}
 
-          {/* Pick History */}
-          {picks.length > 0 && (
-            <div
-              className="rounded-xl border mt-4 overflow-hidden"
-              style={{ borderColor: "var(--gray-200)", background: "white" }}
-            >
-              <div
-                className="px-3 py-2 border-b"
-                style={{ borderColor: "var(--gray-100)" }}
-              >
-                <p
-                  className="text-xs font-semibold"
-                  style={{ color: "var(--gray-700)" }}
-                >
-                  Recent Picks
+      {/* My Queue Tab */}
+      {sideTab === "queue" && (
+        <div
+          className="rounded-xl border overflow-hidden"
+          style={{ borderColor: "var(--gray-200)", background: "white" }}
+        >
+          <div className="max-h-[60vh] overflow-y-auto">
+            {queue.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className="text-sm" style={{ color: "var(--gray-400)" }}>
+                  No players queued yet.
+                </p>
+                <p className="text-xs mt-1" style={{ color: "var(--gray-400)" }}>
+                  Add players from the Available tab to set your auto-pick priority.
                 </p>
               </div>
-              <div className="max-h-48 overflow-y-auto">
-                {[...picks]
-                  .reverse()
-                  .slice(0, 20)
-                  .map((pick) => (
-                    <div
-                      key={pick.pick_number}
-                      className="px-3 py-1.5 flex items-center justify-between border-b text-xs"
-                      style={{ borderColor: "var(--gray-50)" }}
-                    >
-                      <span style={{ color: "var(--gray-400)" }}>
-                        #{pick.pick_number + 1}
-                      </span>
+            ) : (
+              queue.map((name, idx) => {
+                const drafted = pickedGolfers.has(name);
+                const player = playerMap.current.get(name);
+                return (
+                  <div
+                    key={name}
+                    className="px-3 py-2 flex items-center justify-between border-b"
+                    style={{
+                      borderColor: touchOverIdx === idx ? "var(--green)" : "var(--gray-50)",
+                      borderTopWidth: touchOverIdx === idx ? 2 : undefined,
+                      opacity: drafted ? 0.4 : touchDragIdx === idx ? 0.5 : 1,
+                    }}
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {!drafted && (
+                        <div className="flex flex-col gap-0.5 shrink-0">
+                          <button
+                            onClick={() => moveInQueue(idx, idx - 1)}
+                            disabled={idx === 0}
+                            className="text-[10px] leading-none px-1"
+                            style={{ color: idx === 0 ? "var(--gray-200)" : "var(--gray-400)" }}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            onClick={() => moveInQueue(idx, idx + 1)}
+                            disabled={idx === queue.length - 1}
+                            className="text-[10px] leading-none px-1"
+                            style={{ color: idx === queue.length - 1 ? "var(--gray-200)" : "var(--gray-400)" }}
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      )}
                       <span
-                        className="font-medium"
-                        style={{ color: "var(--gray-900)" }}
+                        className="w-5 text-center text-xs font-semibold shrink-0"
+                        style={{ color: "var(--gray-400)" }}
                       >
-                        {pick.golfer_name}
+                        {idx + 1}
                       </span>
-                      <span style={{ color: "var(--gray-500)" }}>
-                        {getName(pick.user_id)}
-                      </span>
+                      <HeadshotImg
+                        espnId={player?.espnId || 0}
+                        name={name}
+                        size={28}
+                      />
+                      <p
+                        className={`text-sm font-medium truncate ${drafted ? "line-through" : ""}`}
+                        style={{ color: drafted ? "var(--gray-400)" : "var(--gray-900)" }}
+                      >
+                        {name}
+                      </p>
                     </div>
-                  ))}
-              </div>
-            </div>
-          )}
+                    {!drafted && (
+                      <button
+                        onClick={() => removeFromQueue(name)}
+                        className="w-6 h-6 flex items-center justify-center rounded text-xs text-red-400 ml-2 shrink-0"
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Recent Picks */}
+      {picks.length > 0 && (
+        <div
+          className="rounded-xl border mt-4 overflow-hidden"
+          style={{ borderColor: "var(--gray-200)", background: "white" }}
+        >
+          <div
+            className="px-3 py-2 border-b"
+            style={{ borderColor: "var(--gray-100)" }}
+          >
+            <p
+              className="text-xs font-semibold"
+              style={{ color: "var(--gray-700)" }}
+            >
+              Recent Picks
+            </p>
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {[...picks]
+              .reverse()
+              .slice(0, 20)
+              .map((pick) => (
+                <div
+                  key={pick.pick_number}
+                  className="px-3 py-1.5 flex items-center justify-between border-b text-xs"
+                  style={{ borderColor: "var(--gray-50)" }}
+                >
+                  <span style={{ color: "var(--gray-400)" }}>
+                    #{pick.pick_number + 1}
+                  </span>
+                  <span
+                    className="font-medium"
+                    style={{ color: "var(--gray-900)" }}
+                  >
+                    {pick.golfer_name}
+                  </span>
+                  <span style={{ color: "var(--gray-500)" }}>
+                    {getName(pick.user_id)}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
