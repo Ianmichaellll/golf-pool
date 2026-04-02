@@ -454,8 +454,9 @@ export default function DraftPage() {
     setPicking(true);
     try {
       await makePick(player.name, userId!, false);
-    } catch (err) {
-      alert("Pick failed — try again");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert("Pick failed: " + msg);
       console.error("Pick error:", err);
     } finally {
       setPicking(false);
