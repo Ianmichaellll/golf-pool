@@ -136,9 +136,6 @@ export default function DraftPage() {
   const [queue, setQueue] = useState<string[]>([]);
   const [sideTab, setSideTab] = useState<"available" | "teams" | "queue">("available");
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
-  // Mobile touch drag state
-  const [touchDragIdx, setTouchDragIdx] = useState<number | null>(null);
-  const [touchOverIdx, setTouchOverIdx] = useState<number | null>(null);
   const queueRef = useRef<string[]>([]);
   queueRef.current = queue;
 
@@ -1249,40 +1246,15 @@ export default function DraftPage() {
                 return (
                   <div
                     key={name}
-                    data-queue-idx={idx}
-                    className="px-3 py-2 flex items-center justify-between border-b select-none"
+                    className="px-3 py-2 flex items-center justify-between border-b"
                     style={{
-                      borderColor: touchOverIdx === idx ? "var(--green)" : "var(--gray-50)",
-                      borderTopWidth: touchOverIdx === idx ? 2 : undefined,
-                      opacity: drafted ? 0.4 : touchDragIdx === idx ? 0.5 : 1,
-                      transition: "opacity 0.15s",
+                      borderColor: "var(--gray-50)",
+                      opacity: drafted ? 0.4 : 1,
                     }}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       {!drafted && (
-                        <div
-                          className="flex flex-col items-center shrink-0 cursor-grab active:cursor-grabbing touch-none"
-                          onTouchStart={(e) => {
-                            e.stopPropagation();
-                            setTouchDragIdx(idx);
-                          }}
-                          onTouchMove={(e) => {
-                            const touch = e.touches[0];
-                            const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                            const row = el?.closest("[data-queue-idx]");
-                            if (row) {
-                              const overIdx = parseInt(row.getAttribute("data-queue-idx") || "-1");
-                              if (overIdx >= 0) setTouchOverIdx(overIdx);
-                            }
-                          }}
-                          onTouchEnd={() => {
-                            if (touchDragIdx !== null && touchOverIdx !== null && touchDragIdx !== touchOverIdx) {
-                              moveInQueue(touchDragIdx, touchOverIdx);
-                            }
-                            setTouchDragIdx(null);
-                            setTouchOverIdx(null);
-                          }}
-                        >
+                        <div className="flex flex-col gap-0.5 shrink-0">
                           <button
                             onClick={() => moveInQueue(idx, idx - 1)}
                             disabled={idx === 0}
@@ -1291,7 +1263,6 @@ export default function DraftPage() {
                           >
                             ▲
                           </button>
-                          <span className="text-[8px]" style={{ color: "var(--gray-300)" }}>⠿</span>
                           <button
                             onClick={() => moveInQueue(idx, idx + 1)}
                             disabled={idx === queue.length - 1}
