@@ -47,6 +47,7 @@ type Player = {
   name: string;
   country: string;
   rank: number;
+  worldRank: number;
   lastFinish: string;
   odds: string;
   oddsNum: number;
@@ -1208,7 +1209,7 @@ export default function DraftPage() {
                           <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
                             <p style={{ color: "var(--gray-400)" }}>World Rank</p>
                             <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
-                              #{player.rank}
+                              {player.worldRank ? `#${player.worldRank}` : "--"}
                             </p>
                           </div>
                           <div className="text-center rounded-lg p-2" style={{ background: "white" }}>

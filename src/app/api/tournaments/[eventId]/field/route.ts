@@ -6,6 +6,9 @@ const ESPN_BASE =
 const BOVADA_GOLF_URL =
   "https://www.bovada.lv/services/sports/event/v2/events/A/description/golf";
 
+const OWGR_URL =
+  "https://apiweb.owgr.com/api/owgr/rankings/getRankings?pageSize=300&pageNumber=1";
+
 type ESPNCompetitor = {
   id: string;
   order?: number;
@@ -112,6 +115,33 @@ async function findPreviousEventId(
   }
 }
 
+// Fetch Official World Golf Rankings (free, no auth, updated weekly)
+async function fetchWorldRankings(): Promise<Map<string, number>> {
+  const rankMap = new Map<string, number>();
+
+  try {
+    const res = await fetch(OWGR_URL, {
+      headers: { "User-Agent": "GolfPool/1.0", Accept: "application/json" },
+      next: { revalidate: 86400 }, // cache 24 hours
+    });
+    if (!res.ok) return rankMap;
+
+    const data = await res.json();
+    const rankings = data.rankingsList || [];
+
+    for (const entry of rankings) {
+      const name = normalizeForMatch(
+        entry.player?.fullName || `${entry.player?.firstName} ${entry.player?.lastName}`
+      );
+      rankMap.set(name, entry.rank);
+    }
+  } catch (err) {
+    console.error("OWGR fetch error:", err);
+  }
+
+  return rankMap;
+}
+
 // Fetch tournament odds from Bovada (free, no auth, all PGA events)
 async function fetchOdds(): Promise<Map<string, string>> {
   const oddsMap = new Map<string, string>();
@@ -163,10 +193,11 @@ export async function GET(
   const { eventId } = await params;
 
   try {
-    // 1. Fetch current event field + odds in parallel
-    const [eventRes, oddsMap] = await Promise.all([
+    // 1. Fetch current event field + odds + world rankings in parallel
+    const [eventRes, oddsMap, worldRankMap] = await Promise.all([
       fetch(`${ESPN_BASE}?event=${eventId}`, { next: { revalidate: 600 } }),
       fetchOdds(),
+      fetchWorldRankings(),
     ]);
     if (!eventRes.ok) throw new Error(`ESPN API error: ${eventRes.status}`);
     const eventData = await eventRes.json();
@@ -226,6 +257,7 @@ export async function GET(
         name,
         country: c.athlete?.flag?.alt || "",
         rank: c.order ?? i + 1,
+        worldRank: worldRankMap.get(norm) || 0,
         lastFinish: lastFinishMap.get(norm) || "--",
         odds,
         oddsNum,
