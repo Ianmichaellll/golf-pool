@@ -606,6 +606,57 @@ export default function DraftPage() {
       .eq("id", draft.id);
   }
 
+  async function handleRestartDraft() {
+    if (!draft || !isAdmin || !pool) return;
+    if (!confirm("Restart the entire draft? All picks will be deleted and a new draft order will be randomized.")) return;
+
+    // Delete all picks
+    await supabase
+      .from("draft_picks")
+      .delete()
+      .eq("draft_id", draft.id);
+
+    // Randomize new draft order
+    const shuffled = [...members]
+      .sort(() => Math.random() - 0.5)
+      .map((m) => m.user_id);
+
+    // Reset draft
+    await supabase
+      .from("drafts")
+      .update({
+        current_pick: 0,
+        status: "active",
+        draft_order: shuffled,
+        current_turn_deadline: new Date(
+          Date.now() + pool.timer_seconds * 1000
+        ).toISOString(),
+        started_at: new Date(Date.now() + 5000).toISOString(),
+        completed_at: null,
+      })
+      .eq("id", draft.id);
+
+    // Reset pool status back to drafting
+    await supabase
+      .from("pools")
+      .update({ status: "drafting" })
+      .eq("id", pool.id);
+
+    // Update local state
+    setPicks([]);
+    setDraft((prev) => prev ? {
+      ...prev,
+      current_pick: 0,
+      status: "active",
+      draft_order: shuffled,
+      current_turn_deadline: new Date(
+        Date.now() + pool.timer_seconds * 1000
+      ).toISOString(),
+      started_at: new Date(Date.now() + 5000).toISOString(),
+      completed_at: null,
+    } as Draft : prev);
+  }
+
   async function handleKickFromDraft(targetUserId: string) {
     if (!isAdmin || !draft || !pool) return;
     const name = getName(targetUserId);
@@ -742,7 +793,7 @@ export default function DraftPage() {
       </div>
 
       {/* Admin Controls */}
-      {isAdmin && phase === "active" && (
+      {isAdmin && (phase === "active" || phase === "completed") && (
         <div
           className="rounded-lg border px-4 py-3 mb-4 flex items-center justify-between flex-wrap gap-2"
           style={{ borderColor: "var(--gray-200)", background: "var(--gray-50)" }}
@@ -773,6 +824,17 @@ export default function DraftPage() {
               }}
             >
               Undo Pick
+            </button>
+            <button
+              onClick={handleRestartDraft}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+              style={{
+                borderColor: "#ef4444",
+                background: "white",
+                color: "#ef4444",
+              }}
+            >
+              Restart Draft
             </button>
           </div>
         </div>
