@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 const ESPN_BASE =
   "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard";
 
-const ODDS_API_KEY = process.env.ODDS_API_KEY || "";
+const BOVADA_GOLF_URL =
+  "https://www.bovada.lv/services/sports/event/v2/events/A/description/golf";
 
 type ESPNCompetitor = {
   id: string;
@@ -111,40 +112,45 @@ async function findPreviousEventId(
   }
 }
 
-// Fetch tournament odds from The Odds API (free tier: 500 req/month)
-// Sign up at https://the-odds-api.com — set ODDS_API_KEY env var
+// Fetch tournament odds from Bovada (free, no auth, all PGA events)
 async function fetchOdds(): Promise<Map<string, string>> {
   const oddsMap = new Map<string, string>();
-  if (!ODDS_API_KEY) return oddsMap;
 
   try {
-    // The Odds API uses sport keys like "golf_pga_tour"
-    const url = `https://api.the-odds-api.com/v4/sports/golf_pga_tour/odds/?apiKey=${ODDS_API_KEY}&regions=us&markets=outrights&oddsFormat=american`;
-    const res = await fetch(url, { next: { revalidate: 1800 } }); // cache 30 min
+    const res = await fetch(BOVADA_GOLF_URL, {
+      headers: { "User-Agent": "GolfPool/1.0" },
+      next: { revalidate: 1800 }, // cache 30 min
+    });
     if (!res.ok) return oddsMap;
 
     const data = await res.json();
-    // data is array of events, each with bookmakers[].markets[].outcomes[]
-    // Find the current/upcoming event (first one)
-    const event = data?.[0];
-    if (!event?.bookmakers?.length) return oddsMap;
 
-    // Use first bookmaker's outrights market
-    const bookmaker = event.bookmakers[0];
-    const market = bookmaker?.markets?.find(
-      (m: { key: string }) => m.key === "outrights"
-    );
-    if (!market?.outcomes) return oddsMap;
-
-    for (const outcome of market.outcomes) {
-      const name = normalizeForMatch(outcome.name || "");
-      const price = outcome.price;
-      // Format as American odds: positive gets +, negative stays
-      const formatted = price >= 0 ? `+${price}` : String(price);
-      oddsMap.set(name, formatted);
+    // Bovada structure: array of event groups → events[] → displayGroups[] → markets[] → outcomes[]
+    // Find the "Winner" market in the first PGA event
+    const events = data?.[0]?.events || [];
+    for (const event of events) {
+      const groups = event.displayGroups || [];
+      for (const group of groups) {
+        const markets = group.markets || [];
+        for (const market of markets) {
+          if (
+            market.description?.toLowerCase() === "winner" ||
+            market.description?.toLowerCase() === "outright winner"
+          ) {
+            for (const outcome of market.outcomes || []) {
+              const name = normalizeForMatch(outcome.description || "");
+              const american = outcome.price?.american || "";
+              if (name && american) {
+                oddsMap.set(name, american);
+              }
+            }
+            if (oddsMap.size > 0) return oddsMap;
+          }
+        }
+      }
     }
   } catch (err) {
-    console.error("Odds API error:", err);
+    console.error("Odds fetch error:", err);
   }
 
   return oddsMap;
@@ -207,19 +213,33 @@ export async function GET(
       const name = c.athlete?.fullName || c.athlete?.displayName || "Unknown";
       const norm = normalizeForMatch(name);
 
+      const odds = oddsMap.get(norm) || "";
+      // Parse odds to numeric for sorting (lower = favorite)
+      let oddsNum = 999999;
+      if (odds) {
+        const parsed = parseInt(odds.replace("+", ""), 10);
+        if (!isNaN(parsed)) oddsNum = parsed;
+      }
+
       return {
         espnId: parseInt(c.id, 10),
         name,
         country: c.athlete?.flag?.alt || "",
         rank: c.order ?? i + 1,
         lastFinish: lastFinishMap.get(norm) || "--",
-        odds: oddsMap.get(norm) || "",
+        odds,
+        oddsNum,
         status: c.status?.type?.name || "active",
       };
     });
 
-    // Sort by ESPN order (pre-tournament this is typically OWGR/odds based)
-    players.sort((a, b) => a.rank - b.rank);
+    // Sort by odds when available (favorites first), fall back to ESPN order
+    const hasOdds = players.some((p) => p.oddsNum < 999999);
+    if (hasOdds) {
+      players.sort((a, b) => a.oddsNum - b.oddsNum);
+    } else {
+      players.sort((a, b) => a.rank - b.rank);
+    }
 
     return NextResponse.json({
       players,
