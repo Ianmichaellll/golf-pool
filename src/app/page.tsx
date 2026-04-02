@@ -11,12 +11,16 @@ export default function HomePage() {
 
   useEffect(() => {
     async function checkAuth() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        router.replace("/pools");
-      } else {
-        setChecking(false);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          router.replace("/pools");
+          return;
+        }
+      } catch {
+        // Auth check failed — show login form
       }
+      setChecking(false);
     }
     checkAuth();
   }, []);
