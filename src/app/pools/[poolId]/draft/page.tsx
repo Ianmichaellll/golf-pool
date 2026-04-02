@@ -1425,13 +1425,28 @@ export default function DraftPage() {
                       </p>
                     </div>
                     {!drafted && (
-                      <button
-                        onClick={() => removeFromQueue(name)}
-                        className="w-6 h-6 flex items-center justify-center rounded text-xs text-red-400 ml-2 shrink-0"
-                        title="Remove"
-                      >
-                        ✕
-                      </button>
+                      <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                        {isMyTurn && phase === "active" && player && (
+                          <button
+                            onClick={() => handlePick(player)}
+                            disabled={picking}
+                            className="px-3 py-1 rounded-lg text-xs font-semibold text-white"
+                            style={{
+                              background: "var(--green)",
+                              opacity: picking ? 0.5 : 1,
+                            }}
+                          >
+                            {picking ? "..." : "Pick"}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => removeFromQueue(name)}
+                          className="w-6 h-6 flex items-center justify-center rounded text-xs text-red-400"
+                          title="Remove"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     )}
                   </div>
                 );
