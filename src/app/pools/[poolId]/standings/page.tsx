@@ -414,11 +414,11 @@ function PlayerRow({
         <div
           className={`${isArchived ? "col-span-6" : "col-span-4"} flex items-center gap-2 text-left`}
         >
-          {hasData && expanded && (
+          {hasData && (
             <img
               src={headshotUrl(player.espnId!)}
               alt=""
-              className="w-8 h-6 object-cover rounded"
+              className="w-6 h-6 object-cover rounded-full flex-shrink-0"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
           )}
@@ -711,11 +711,11 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
           className="col-span-5 text-xs sm:text-sm truncate text-left flex items-center gap-1"
           style={{ color: "var(--gray-900)" }}
         >
-          {expanded && hasData && (
+          {hasData && (
             <img
               src={headshotUrl(entry.espnId!)}
               alt=""
-              className="w-8 h-6 object-cover rounded flex-shrink-0"
+              className="w-6 h-6 object-cover rounded-full flex-shrink-0"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
           )}
