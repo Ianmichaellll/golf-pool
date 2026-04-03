@@ -250,7 +250,7 @@ function TeamCard({
 
           {benchPlayers.length > 0 && (
             <div className="px-3 sm:px-5 pt-2 pb-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Bench</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Alternates</span>
             </div>
           )}
           {benchPlayers.map((player) => (
