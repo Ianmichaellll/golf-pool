@@ -254,46 +254,46 @@ export async function GET() {
         };
       });
 
-      // Total points = sum of numeric positions (lower is better)
-      // MC/WD players use their ESPN order (actual finishing position)
-      let totalPoints = 0;
-      let tiebreaker = 0;
+      // Combined score (lower is better, E=0, under par is negative)
+      let totalScore = 0;
+      // Position sum as tiebreaker (lower is better)
+      let positionSum = 0;
       for (const p of players) {
-        const posNum = parseInt(p.position.replace("T", ""));
-        if (!isNaN(posNum)) {
-          totalPoints += posNum;
-        } else {
-          // MC, WD, DQ — use their order from ESPN as their position
-          const scores = playerScores[p.name.toLowerCase()];
-          totalPoints += scores?.order || 999;
-        }
-        // Tiebreaker: sum of scores relative to par
         const scoreNum = parseInt(p.score.replace("E", "0"));
         if (!isNaN(scoreNum)) {
-          tiebreaker += scoreNum;
+          totalScore += scoreNum;
+        }
+        const posNum = parseInt(p.position.replace("T", ""));
+        if (!isNaN(posNum)) {
+          positionSum += posNum;
+        } else {
+          const scores = playerScores[p.name.toLowerCase()];
+          positionSum += scores?.order || 999;
         }
       }
 
-      // Sort players by position (best first)
+      // Sort players by score (best first)
       players.sort((a, b) => {
-        const posA = parseInt(a.position.replace("T", "")) || 999;
-        const posB = parseInt(b.position.replace("T", "")) || 999;
-        return posA - posB;
+        const scoreA = parseInt(a.score.replace("E", "0"));
+        const scoreB = parseInt(b.score.replace("E", "0"));
+        if (isNaN(scoreA)) return 1;
+        if (isNaN(scoreB)) return -1;
+        return scoreA - scoreB;
       });
 
       return {
         id: team.id,
         owner: team.owner,
         players,
-        totalPoints,
-        tiebreaker,
+        totalScore,
+        positionSum,
       };
     });
 
-    // Sort teams
+    // Sort teams by combined score (lowest wins), position sum breaks ties
     teams.sort((a, b) => {
-      if (a.totalPoints !== b.totalPoints) return a.totalPoints - b.totalPoints;
-      return a.tiebreaker - b.tiebreaker;
+      if (a.totalScore !== b.totalScore) return a.totalScore - b.totalScore;
+      return a.positionSum - b.positionSum;
     });
 
     const eventStatus =

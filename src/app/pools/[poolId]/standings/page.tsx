@@ -19,8 +19,8 @@ type TeamDisplay = {
   id: string;
   owner: string;
   players: PlayerDisplay[];
-  totalPoints: number;
-  tiebreaker: number;
+  totalScore: number;
+  positionSum: number;
 };
 
 type LeaderboardEntry = {
@@ -134,14 +134,10 @@ function TeamCard({
         <div className="flex items-center gap-3">
           <div className="text-right">
             <div className="text-2xl font-bold tabular-nums" style={{ color: "var(--gray-900)" }}>
-              {team.totalPoints}
-              <span className="text-xs font-normal ml-1" style={{ color: "var(--gray-400)" }}>
-                pts
-              </span>
+              {team.totalScore > 0 ? "+" : ""}{team.totalScore}
             </div>
             <div className="text-xs tabular-nums" style={{ color: "var(--gray-400)" }}>
-              Tiebreak: {team.tiebreaker > 0 ? "+" : ""}
-              {team.tiebreaker}
+              Pos: {team.positionSum}
             </div>
           </div>
           <svg

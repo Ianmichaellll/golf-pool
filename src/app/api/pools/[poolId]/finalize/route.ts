@@ -230,32 +230,32 @@ export async function POST(
       };
     });
 
-    let totalPoints = 0;
-    let tiebreaker = 0;
+    let totalScore = 0;
+    let positionSum = 0;
     for (const p of players) {
+      const scoreNum = parseInt(p.score.replace("E", "0"));
+      if (!isNaN(scoreNum)) totalScore += scoreNum;
       const posNum = parseInt(p.position.replace("T", ""));
       if (!isNaN(posNum)) {
-        totalPoints += posNum;
+        positionSum += posNum;
       } else if (p.position !== "--") {
         const espn = findEspnMatch(p.name, competitors);
-        totalPoints += espn?.order || 999;
+        positionSum += espn?.order || 999;
       }
-      const scoreNum = parseInt(p.score.replace("E", "0"));
-      if (!isNaN(scoreNum)) tiebreaker += scoreNum;
     }
 
     return {
       id: uid,
       owner: nameMap.get(uid) || "Unknown",
       players,
-      totalPoints,
-      tiebreaker,
+      totalScore,
+      positionSum,
     };
   });
 
   teams.sort((a, b) => {
-    if (a.totalPoints !== b.totalPoints) return a.totalPoints - b.totalPoints;
-    return a.tiebreaker - b.tiebreaker;
+    if (a.totalScore !== b.totalScore) return a.totalScore - b.totalScore;
+    return a.positionSum - b.positionSum;
   });
 
   // Build draft results snapshot

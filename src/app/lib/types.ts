@@ -12,8 +12,8 @@ export type Team = {
   id: string;
   owner: string;
   players: Player[];
-  totalPoints: number;
-  tiebreaker: number;
+  totalScore: number;
+  positionSum: number;
 };
 
 export type PoolConfig = {
