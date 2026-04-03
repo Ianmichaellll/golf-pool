@@ -13,6 +13,8 @@ type PlayerDisplay = {
   thru?: string;
   today?: string;
   isActive: boolean;
+  isExtra?: boolean;
+  countsForScore?: boolean;
 };
 
 type TeamDisplay = {
@@ -89,8 +91,13 @@ function TeamCard({
   isArchived: boolean;
 }) {
   const [open, setOpen] = useState(rank === 1 && isArchived);
-  const activePlayers = team.players.filter((p) => p.isActive);
-  const wdPlayers = team.players.filter((p) => !p.isActive);
+  // Scoring players (starters + promoted extras that count)
+  const scoringPlayers = team.players.filter((p) => p.countsForScore);
+  // WD starters (replaced by extras, shown separately)
+  const wdPlayers = team.players.filter((p) => !p.countsForScore && !p.isExtra && (p.position === "WD" || p.position === "DQ"));
+  // Unused bench extras
+  const benchPlayers = team.players.filter((p) => p.isExtra);
+  const activePlayers = scoringPlayers;
   const isWinner = rank === 1 && isArchived;
 
   return (
@@ -209,6 +216,11 @@ function TeamCard({
             </div>
           ))}
 
+          {wdPlayers.length > 0 && (
+            <div className="px-3 sm:px-5 pt-2 pb-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400">Withdrawn</span>
+            </div>
+          )}
           {wdPlayers.map((player) => (
             <div
               key={player.name}
@@ -222,20 +234,48 @@ function TeamCard({
                 {player.name}
               </div>
               <div className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm font-medium text-red-500`}>
+                WD
+              </div>
+              <div className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm`} style={{ color: "var(--gray-400)" }}>
+                {player.score}
+              </div>
+              {!isArchived && (
+                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>--</div>
+              )}
+              {!isArchived && (
+                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>--</div>
+              )}
+            </div>
+          ))}
+
+          {benchPlayers.length > 0 && (
+            <div className="px-3 sm:px-5 pt-2 pb-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>Bench</span>
+            </div>
+          )}
+          {benchPlayers.map((player) => (
+            <div
+              key={player.name}
+              className={`grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center border-t`}
+              style={{ borderColor: "var(--gray-50)", opacity: 0.5 }}
+            >
+              <div
+                className={`${isArchived ? "col-span-6" : "col-span-4"} text-xs sm:text-sm truncate`}
+                style={{ color: "var(--gray-500)" }}
+              >
+                {player.name}
+              </div>
+              <div className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm`} style={{ color: "var(--gray-400)" }}>
                 {player.position}
               </div>
               <div className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm`} style={{ color: "var(--gray-400)" }}>
                 {player.score}
               </div>
               {!isArchived && (
-                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>
-                  {player.thru}
-                </div>
+                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>{player.thru}</div>
               )}
               {!isArchived && (
-                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>
-                  {player.today}
-                </div>
+                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>{player.today}</div>
               )}
             </div>
           ))}

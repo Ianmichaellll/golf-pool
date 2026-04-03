@@ -272,19 +272,26 @@ export async function GET(
 
   // 5. Build team standings
   const fieldSize = competitors.length;
+  const playersPerTeam = pool.players_per_team;
+  const extrasCount = pool.extras_count;
 
   const teams = userIds.map((uid) => {
-    const playerNames = teamPicks.get(uid) || [];
-    const players = playerNames.map((name) => {
+    const allNames = teamPicks.get(uid) || [];
+
+    // Split into starters (first N picks) and extras (remaining)
+    const starterNames = allNames.slice(0, playersPerTeam);
+    const extraNames = allNames.slice(playersPerTeam);
+
+    // Build player data for all picks
+    function buildPlayer(name: string) {
       const espn = findEspnMatch(name);
       if (!espn) {
-        return { name, position: "--", score: "--", thru: "--", today: "--", isActive: true };
+        return { name, position: "--", score: "--", thru: "--", today: "--", isActive: true, isWD: false, isMC: false, isExtra: false, countsForScore: false };
       }
       const pos = positionMap.get(espn.athlete.displayName.toLowerCase()) || "--";
       const mc = pos === "MC";
       const wd = pos === "WD" || pos === "DQ";
 
-      // For MC players, use their actual 2-round score
       let score = "--";
       if (tournamentStarted) {
         if (mc || wd) {
@@ -296,25 +303,67 @@ export async function GET(
 
       return {
         name,
-        position: mc ? "MC" : wd ? pos : pos,
+        position: pos,
         score,
-        thru: tournamentStarted ? (mc ? "MC" : getThru(espn, currentRound)) : "--",
-        today: tournamentStarted ? (mc ? "--" : getTodayScore(espn, currentRound)) : "--",
+        thru: tournamentStarted ? (mc ? "MC" : wd ? "WD" : getThru(espn, currentRound)) : "--",
+        today: tournamentStarted ? (mc || wd ? "--" : getTodayScore(espn, currentRound)) : "--",
         isActive: !mc && !wd,
+        isWD: wd,
+        isMC: mc,
+        isExtra: false,
+        countsForScore: false,
       };
+    }
+
+    const starters = starterNames.map(buildPlayer);
+    const extras = extraNames.map((name) => {
+      const p = buildPlayer(name);
+      p.isExtra = true;
+      return p;
     });
 
-    // Combined score (lower is better, E=0, under par is negative)
+    // Determine which players count for scoring:
+    // - Active starters always count
+    // - WD starters are replaced by extras (in draft order)
+    // - MC starters still count (they keep their 2-round score)
+    const scoringPlayers: typeof starters = [];
+    let extraIdx = 0;
+
+    for (const starter of starters) {
+      if (starter.isWD && extrasCount > 0) {
+        // WD starter: find next available extra who is not also WD
+        let replaced = false;
+        while (extraIdx < extras.length) {
+          const extra = extras[extraIdx];
+          extraIdx++;
+          if (!extra.isWD) {
+            extra.isExtra = false; // promoted to active
+            extra.countsForScore = true;
+            scoringPlayers.push(extra);
+            replaced = true;
+            break;
+          }
+        }
+        if (!replaced) {
+          // No available extras — WD starter counts with their score
+          starter.countsForScore = true;
+          scoringPlayers.push(starter);
+        }
+      } else {
+        starter.countsForScore = true;
+        scoringPlayers.push(starter);
+      }
+    }
+
+    // Combined score from scoring players only
     let totalScore = 0;
-    // Position sum as tiebreaker (lower is better)
     let positionSum = 0;
-    for (const p of players) {
+    for (const p of scoringPlayers) {
       const scoreNum = parseInt(p.score.replace("E", "0"));
       if (!isNaN(scoreNum)) {
         totalScore += scoreNum;
       }
       if (p.position === "MC" || p.position === "WD" || p.position === "DQ") {
-        // MC/WD = last place in the field
         positionSum += fieldSize;
       } else {
         const posNum = parseInt(p.position.replace("T", ""));
@@ -324,7 +373,11 @@ export async function GET(
       }
     }
 
-    players.sort((a, b) => {
+    // Build final player list: scoring players first (sorted by score), then WD starters, then unused extras
+    const wdStarters = starters.filter((s) => s.isWD && !s.countsForScore);
+    const unusedExtras = extras.filter((e) => e.isExtra);
+
+    scoringPlayers.sort((a, b) => {
       const scoreA = parseInt(a.score.replace("E", "0"));
       const scoreB = parseInt(b.score.replace("E", "0"));
       if (isNaN(scoreA)) return 1;
@@ -332,10 +385,25 @@ export async function GET(
       return scoreA - scoreB;
     });
 
+    const allPlayers = [
+      ...scoringPlayers,
+      ...wdStarters.map((p) => ({ ...p, position: "WD" })),
+      ...unusedExtras.map((p) => ({ ...p, isExtra: true })),
+    ];
+
     return {
       id: uid,
       owner: nameMap.get(uid) || "Unknown",
-      players,
+      players: allPlayers.map((p) => ({
+        name: p.name,
+        position: p.position,
+        score: p.score,
+        thru: p.thru,
+        today: p.today,
+        isActive: p.isActive,
+        isExtra: p.isExtra,
+        countsForScore: p.countsForScore,
+      })),
       totalScore,
       positionSum,
     };
