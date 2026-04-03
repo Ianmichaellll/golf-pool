@@ -17,7 +17,7 @@ export async function GET(
 
     if (!res.ok) {
       return NextResponse.json(
-        { wins: "--", top10s: "--", scoringAvg: "--", earnings: "--" },
+        { wins: "--", top10s: "--", scoringAvg: "--", earnings: "--", birthDate: "", birthPlace: "--", college: "--", age: "--" },
         { headers: { "Cache-Control": "public, max-age=3600" } }
       );
     }
@@ -60,14 +60,32 @@ export async function GET(
       earnings = rawEarnings || "--";
     }
 
+    // Extract bio data from athlete profile
+    const athlete = data.athlete || {};
+    const dob = athlete.dateOfBirth || "";
+    const birthPlace = [athlete.birthPlace?.city, athlete.birthPlace?.state, athlete.birthPlace?.country]
+      .filter(Boolean)
+      .join(", ") || "--";
+    const college = athlete.college?.name || "--";
+
+    // Calculate age from DOB
+    let age = "--";
+    if (dob) {
+      const birthDate = new Date(dob);
+      const now = new Date();
+      const years = now.getFullYear() - birthDate.getFullYear();
+      const monthDiff = now.getMonth() - birthDate.getMonth();
+      age = String(monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate()) ? years - 1 : years);
+    }
+
     return NextResponse.json(
-      { wins, top10s, scoringAvg, earnings },
+      { wins, top10s, scoringAvg, earnings, birthDate: dob, birthPlace, college, age },
       { headers: { "Cache-Control": "public, max-age=3600" } }
     );
   } catch (err) {
     console.error("Athlete stats error:", err);
     return NextResponse.json(
-      { wins: "--", top10s: "--", scoringAvg: "--", earnings: "--" },
+      { wins: "--", top10s: "--", scoringAvg: "--", earnings: "--", birthDate: "", birthPlace: "--", college: "--", age: "--" },
       { headers: { "Cache-Control": "public, max-age=600" } }
     );
   }

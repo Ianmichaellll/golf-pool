@@ -14,6 +14,7 @@ type ESPNLinescore = {
 };
 
 type ESPNCompetitor = {
+  id?: string;
   order: number;
   score: string;
   athlete: { displayName: string; fullName: string };
@@ -106,6 +107,21 @@ function getActualScore(c: ESPNCompetitor): string {
   if (!hasData) return "--";
   if (total === 0) return "E";
   return total > 0 ? `+${total}` : String(total);
+}
+
+function buildScorecard(c: ESPNCompetitor): { round: number; score: string; holes: { hole: number; score: number; par: number }[] }[] {
+  if (!c.linescores?.length) return [];
+  return c.linescores
+    .filter((r) => r.linescores && r.linescores.length > 0)
+    .map((r) => ({
+      round: r.period,
+      score: r.displayValue || "--",
+      holes: (r.linescores || []).map((h) => ({
+        hole: h.period,
+        score: h.value,
+        par: h.value - parseInt(h.displayValue || "0"),
+      })),
+    }));
 }
 
 function computePositions(competitors: ESPNCompetitor[]): Map<string, string> {
@@ -286,7 +302,7 @@ export async function GET(
     function buildPlayer(name: string) {
       const espn = findEspnMatch(name);
       if (!espn) {
-        return { name, position: "--", score: "--", thru: "--", today: "--", isActive: true, isWD: false, isMC: false, isExtra: false, countsForScore: false };
+        return { name, espnId: 0, position: "--", score: "--", thru: "--", today: "--", scorecard: [] as ReturnType<typeof buildScorecard>, isActive: true, isWD: false, isMC: false, isExtra: false, countsForScore: false };
       }
       const pos = positionMap.get(espn.athlete.displayName.toLowerCase()) || "--";
       const mc = pos === "MC";
@@ -303,10 +319,12 @@ export async function GET(
 
       return {
         name,
+        espnId: parseInt(espn.id || "0", 10),
         position: pos,
         score,
         thru: tournamentStarted ? (mc ? "MC" : wd ? "WD" : getThru(espn, currentRound)) : "--",
         today: tournamentStarted ? (mc || wd ? "--" : getTodayScore(espn, currentRound)) : "--",
+        scorecard: tournamentStarted ? buildScorecard(espn) : [],
         isActive: !mc && !wd,
         isWD: wd,
         isMC: mc,
@@ -396,10 +414,12 @@ export async function GET(
       owner: nameMap.get(uid) || "Unknown",
       players: allPlayers.map((p) => ({
         name: p.name,
+        espnId: p.espnId,
         position: p.position,
         score: p.score,
         thru: p.thru,
         today: p.today,
+        scorecard: p.scorecard,
         isActive: p.isActive,
         isExtra: p.isExtra,
         countsForScore: p.countsForScore,
@@ -423,10 +443,12 @@ export async function GET(
       allPoolPlayers.has(normalizeForMatch(c.athlete.fullName));
     return {
       name: c.athlete.displayName,
+      espnId: parseInt(c.id || "0", 10),
       position: tournamentStarted ? pos : "--",
       score: tournamentStarted ? (c.score || "E") : "--",
       today: tournamentStarted ? getTodayScore(c, currentRound) : "--",
       thru: tournamentStarted ? getThru(c, currentRound) : "--",
+      scorecard: tournamentStarted ? buildScorecard(c) : [],
       isPoolPlayer,
     };
   });

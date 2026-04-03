@@ -6,12 +6,20 @@ import { createClient } from "../../../lib/supabase/client";
 
 // ── Types ───────────────────────────────────────────────────────────
 
+type ScorecardRound = {
+  round: number;
+  score: string;
+  holes: { hole: number; score: number; par: number }[];
+};
+
 type PlayerDisplay = {
   name: string;
+  espnId?: number;
   position: string;
   score: string;
   thru?: string;
   today?: string;
+  scorecard?: ScorecardRound[];
   isActive: boolean;
   isExtra?: boolean;
   countsForScore?: boolean;
@@ -27,10 +35,12 @@ type TeamDisplay = {
 
 type LeaderboardEntry = {
   name: string;
+  espnId?: number;
   position: string;
   score: string;
   today: string;
   thru: string;
+  scorecard?: ScorecardRound[];
   isPoolPlayer: boolean;
 };
 
@@ -65,6 +75,17 @@ type HistoryResponse = {
   playersPerTeam: number;
 };
 
+type PlayerBio = {
+  wins: string;
+  top10s: string;
+  scoringAvg: string;
+  earnings: string;
+  birthDate: string;
+  birthPlace: string;
+  college: string;
+  age: string;
+};
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function getPositionStyle(pos: string): string {
@@ -77,6 +98,351 @@ function getPositionStyle(pos: string): string {
 function getScoreStyle(score: string): string {
   if (score.startsWith("-")) return "text-red-600";
   return "";
+}
+
+function headshotUrl(espnId: number): string {
+  return `https://a.espncdn.com/combiner/i?img=/i/headshots/golf/players/full/${espnId}.png&w=96&h=70&cb=1`;
+}
+
+function getHoleScoreStyle(score: number, par: number): string {
+  const diff = score - par;
+  if (diff <= -2) return "bg-yellow-400 text-white rounded-full"; // eagle+
+  if (diff === -1) return "bg-red-500 text-white rounded-full"; // birdie
+  if (diff === 1) return "border border-gray-400 rounded-full"; // bogey
+  if (diff >= 2) return "border-2 border-gray-500 rounded-full"; // double+
+  return ""; // par
+}
+
+// Standard par for a typical PGA course (used when par data unavailable)
+const STANDARD_PARS = [4, 4, 3, 4, 5, 4, 3, 4, 5, 4, 4, 3, 4, 5, 4, 3, 4, 5];
+
+// ── Scorecard Component ─────────────────────────────────────────────
+
+function ScorecardView({ scorecard }: { scorecard: ScorecardRound[] }) {
+  const [selectedRound, setSelectedRound] = useState(scorecard.length > 0 ? scorecard[scorecard.length - 1].round : 1);
+  const round = scorecard.find((r) => r.round === selectedRound);
+
+  if (!scorecard.length) {
+    return (
+      <div className="px-4 py-3 text-xs text-center" style={{ color: "var(--gray-400)" }}>
+        No scorecard data available
+      </div>
+    );
+  }
+
+  const front9 = round?.holes.filter((h) => h.hole <= 9) || [];
+  const back9 = round?.holes.filter((h) => h.hole > 9) || [];
+
+  const front9Total = front9.reduce((sum, h) => sum + h.score, 0);
+  const back9Total = back9.reduce((sum, h) => sum + h.score, 0);
+
+  return (
+    <div>
+      {/* Round selector */}
+      {scorecard.length > 1 && (
+        <div className="flex gap-1 px-4 pt-3 pb-1">
+          {scorecard.map((r) => (
+            <button
+              key={r.round}
+              onClick={(e) => { e.stopPropagation(); setSelectedRound(r.round); }}
+              className="px-2.5 py-1 text-[10px] font-semibold rounded-md transition-colors"
+              style={{
+                background: selectedRound === r.round ? "var(--green)" : "var(--gray-100)",
+                color: selectedRound === r.round ? "white" : "var(--gray-500)",
+              }}
+            >
+              R{r.round} ({r.score})
+            </button>
+          ))}
+        </div>
+      )}
+
+      {round && (
+        <div className="px-3 py-2 overflow-x-auto">
+          {/* Front 9 */}
+          <table className="w-full text-[10px] sm:text-xs tabular-nums" style={{ minWidth: 320 }}>
+            <thead>
+              <tr style={{ color: "var(--gray-400)" }}>
+                <td className="font-semibold py-1 pr-1">Hole</td>
+                {[1,2,3,4,5,6,7,8,9].map((h) => (
+                  <td key={h} className="text-center w-7 py-1">{h}</td>
+                ))}
+                <td className="text-center font-semibold py-1 pl-1">Out</td>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ color: "var(--gray-700)" }}>
+                <td className="font-semibold py-1 pr-1" style={{ color: "var(--gray-400)" }}>Par</td>
+                {[1,2,3,4,5,6,7,8,9].map((h) => {
+                  const hole = front9.find((ho) => ho.hole === h);
+                  const par = hole ? hole.par : STANDARD_PARS[h - 1];
+                  return <td key={h} className="text-center py-1">{par}</td>;
+                })}
+                <td className="text-center font-semibold py-1 pl-1">
+                  {front9.reduce((s, h) => s + h.par, 0) || 36}
+                </td>
+              </tr>
+              <tr style={{ color: "var(--gray-900)" }}>
+                <td className="font-semibold py-1.5 pr-1" style={{ color: "var(--gray-400)" }}>Score</td>
+                {[1,2,3,4,5,6,7,8,9].map((h) => {
+                  const hole = front9.find((ho) => ho.hole === h);
+                  if (!hole) return <td key={h} className="text-center py-1.5">-</td>;
+                  return (
+                    <td key={h} className="text-center py-1.5">
+                      <span className={`inline-flex items-center justify-center w-5 h-5 text-[10px] sm:text-xs font-medium ${getHoleScoreStyle(hole.score, hole.par)}`}>
+                        {hole.score}
+                      </span>
+                    </td>
+                  );
+                })}
+                <td className="text-center font-bold py-1.5 pl-1">{front9Total || "-"}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Back 9 */}
+          <table className="w-full text-[10px] sm:text-xs tabular-nums mt-1" style={{ minWidth: 320 }}>
+            <thead>
+              <tr style={{ color: "var(--gray-400)" }}>
+                <td className="font-semibold py-1 pr-1">Hole</td>
+                {[10,11,12,13,14,15,16,17,18].map((h) => (
+                  <td key={h} className="text-center w-7 py-1">{h}</td>
+                ))}
+                <td className="text-center font-semibold py-1 pl-1">In</td>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ color: "var(--gray-700)" }}>
+                <td className="font-semibold py-1 pr-1" style={{ color: "var(--gray-400)" }}>Par</td>
+                {[10,11,12,13,14,15,16,17,18].map((h) => {
+                  const hole = back9.find((ho) => ho.hole === h);
+                  const par = hole ? hole.par : STANDARD_PARS[h - 1];
+                  return <td key={h} className="text-center py-1">{par}</td>;
+                })}
+                <td className="text-center font-semibold py-1 pl-1">
+                  {back9.reduce((s, h) => s + h.par, 0) || 36}
+                </td>
+              </tr>
+              <tr style={{ color: "var(--gray-900)" }}>
+                <td className="font-semibold py-1.5 pr-1" style={{ color: "var(--gray-400)" }}>Score</td>
+                {[10,11,12,13,14,15,16,17,18].map((h) => {
+                  const hole = back9.find((ho) => ho.hole === h);
+                  if (!hole) return <td key={h} className="text-center py-1.5">-</td>;
+                  return (
+                    <td key={h} className="text-center py-1.5">
+                      <span className={`inline-flex items-center justify-center w-5 h-5 text-[10px] sm:text-xs font-medium ${getHoleScoreStyle(hole.score, hole.par)}`}>
+                        {hole.score}
+                      </span>
+                    </td>
+                  );
+                })}
+                <td className="text-center font-bold py-1.5 pl-1">{back9Total || "-"}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Total */}
+          {front9Total > 0 && back9Total > 0 && (
+            <div className="flex justify-end mt-1 pr-1">
+              <span className="text-xs font-bold" style={{ color: "var(--gray-900)" }}>
+                Total: {front9Total + back9Total}
+              </span>
+              <span className="ml-2 text-xs" style={{ color: "var(--gray-500)" }}>
+                ({round.score})
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Player Profile Component ────────────────────────────────────────
+
+function PlayerProfile({ espnId }: { espnId: number }) {
+  const [bio, setBio] = useState<PlayerBio | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!espnId) { setLoading(false); return; }
+    fetch(`/api/athletes/${espnId}/stats`)
+      .then((r) => r.json())
+      .then((data) => setBio(data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [espnId]);
+
+  if (loading) {
+    return (
+      <div className="px-4 py-3 text-xs text-center" style={{ color: "var(--gray-400)" }}>
+        Loading profile...
+      </div>
+    );
+  }
+
+  if (!bio) return null;
+
+  const birthDisplay = bio.birthDate
+    ? new Date(bio.birthDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+    : "--";
+
+  return (
+    <div className="px-4 py-3 border-t" style={{ borderColor: "var(--gray-100)" }}>
+      <div className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--gray-400)" }}>
+        Profile
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+        <div>
+          <span style={{ color: "var(--gray-400)" }}>Age: </span>
+          <span style={{ color: "var(--gray-700)" }}>{bio.age}</span>
+        </div>
+        <div>
+          <span style={{ color: "var(--gray-400)" }}>College: </span>
+          <span style={{ color: "var(--gray-700)" }}>{bio.college}</span>
+        </div>
+        <div className="col-span-2">
+          <span style={{ color: "var(--gray-400)" }}>Born: </span>
+          <span style={{ color: "var(--gray-700)" }}>{birthDisplay}</span>
+          {bio.birthPlace !== "--" && (
+            <span style={{ color: "var(--gray-500)" }}> — {bio.birthPlace}</span>
+          )}
+        </div>
+      </div>
+
+      <div className="text-[10px] font-semibold uppercase tracking-wide mt-3 mb-2" style={{ color: "var(--gray-400)" }}>
+        Season Stats
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { label: "Wins", value: bio.wins },
+          { label: "Top 10s", value: bio.top10s },
+          { label: "Avg", value: bio.scoringAvg },
+          { label: "Earnings", value: bio.earnings },
+        ].map((stat) => (
+          <div key={stat.label} className="text-center">
+            <div className="text-sm font-semibold" style={{ color: "var(--gray-900)" }}>
+              {stat.value}
+            </div>
+            <div className="text-[10px]" style={{ color: "var(--gray-400)" }}>
+              {stat.label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Expandable Player Row ───────────────────────────────────────────
+
+function PlayerRow({
+  player,
+  isArchived,
+  dimmed,
+  strikethrough,
+  bgStyle,
+}: {
+  player: PlayerDisplay;
+  isArchived: boolean;
+  dimmed?: boolean;
+  strikethrough?: boolean;
+  bgStyle?: React.CSSProperties;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasData = player.espnId && player.espnId > 0;
+
+  return (
+    <div style={bgStyle}>
+      <button
+        onClick={() => hasData && setExpanded(!expanded)}
+        className={`w-full grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center border-t ${hasData ? "cursor-pointer" : "cursor-default"}`}
+        style={{ borderColor: "var(--gray-50)", opacity: dimmed ? 0.5 : 1 }}
+      >
+        <div
+          className={`${isArchived ? "col-span-6" : "col-span-4"} flex items-center gap-2 text-left`}
+        >
+          {hasData && expanded && (
+            <img
+              src={headshotUrl(player.espnId!)}
+              alt=""
+              className="w-8 h-6 object-cover rounded"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+          <span
+            className={`text-xs sm:text-sm font-medium truncate ${strikethrough ? "line-through" : ""}`}
+            style={{ color: dimmed ? "var(--gray-400)" : strikethrough ? "var(--gray-400)" : "var(--gray-800)" }}
+          >
+            {player.name}
+          </span>
+          {hasData && (
+            <svg
+              className={`w-3 h-3 flex-shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+              style={{ color: "var(--gray-300)" }}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          )}
+        </div>
+        <div
+          className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm tabular-nums ${
+            strikethrough ? "font-medium text-red-500" : getPositionStyle(player.position)
+          }`}
+          style={!strikethrough ? { color: "var(--gray-700)" } : undefined}
+        >
+          {strikethrough ? "WD" : player.position}
+        </div>
+        <div
+          className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm font-medium tabular-nums ${getScoreStyle(player.score)}`}
+          style={{ color: dimmed ? "var(--gray-400)" : "var(--gray-700)" }}
+        >
+          {player.score}
+        </div>
+        {!isArchived && (
+          <div
+            className="col-span-2 text-center text-xs sm:text-sm tabular-nums"
+            style={{ color: dimmed ? "var(--gray-400)" : "var(--gray-500)" }}
+          >
+            {player.thru}
+          </div>
+        )}
+        {!isArchived && (
+          <div
+            className={`col-span-2 text-center text-xs sm:text-sm tabular-nums ${getScoreStyle(player.today || "")}`}
+            style={{ color: dimmed ? "var(--gray-400)" : "var(--gray-700)" }}
+          >
+            {player.today}
+          </div>
+        )}
+      </button>
+
+      {expanded && hasData && (
+        <div
+          className="border-t"
+          style={{ borderColor: "var(--gray-100)", background: "var(--gray-50)" }}
+        >
+          {/* Scorecard */}
+          {player.scorecard && player.scorecard.length > 0 && (
+            <div>
+              <div className="px-4 pt-3 pb-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>
+                  Scorecard
+                </span>
+              </div>
+              <ScorecardView scorecard={player.scorecard} />
+            </div>
+          )}
+          {/* Profile */}
+          <PlayerProfile espnId={player.espnId!} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Components ──────────────────────────────────────────────────────
@@ -174,46 +540,7 @@ function TeamCard({
           </div>
 
           {activePlayers.map((player) => (
-            <div
-              key={player.name}
-              className={`grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center border-t`}
-              style={{ borderColor: "var(--gray-50)" }}
-            >
-              <div
-                className={`${isArchived ? "col-span-6" : "col-span-4"} text-xs sm:text-sm font-medium truncate`}
-                style={{ color: "var(--gray-800)" }}
-              >
-                {player.name}
-              </div>
-              <div
-                className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm tabular-nums ${getPositionStyle(player.position)}`}
-                style={{ color: "var(--gray-700)" }}
-              >
-                {player.position}
-              </div>
-              <div
-                className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm font-medium tabular-nums ${getScoreStyle(player.score)}`}
-                style={{ color: "var(--gray-700)" }}
-              >
-                {player.score}
-              </div>
-              {!isArchived && (
-                <div
-                  className="col-span-2 text-center text-xs sm:text-sm tabular-nums"
-                  style={{ color: "var(--gray-500)" }}
-                >
-                  {player.thru}
-                </div>
-              )}
-              {!isArchived && (
-                <div
-                  className={`col-span-2 text-center text-xs sm:text-sm tabular-nums ${getScoreStyle(player.today || "")}`}
-                  style={{ color: "var(--gray-700)" }}
-                >
-                  {player.today}
-                </div>
-              )}
-            </div>
+            <PlayerRow key={player.name} player={player} isArchived={isArchived} />
           ))}
 
           {wdPlayers.length > 0 && (
@@ -222,30 +549,13 @@ function TeamCard({
             </div>
           )}
           {wdPlayers.map((player) => (
-            <div
+            <PlayerRow
               key={player.name}
-              className={`grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center border-t`}
-              style={{ borderColor: "var(--gray-50)", background: "rgba(239,68,68,0.04)" }}
-            >
-              <div
-                className={`${isArchived ? "col-span-6" : "col-span-4"} text-xs sm:text-sm line-through truncate`}
-                style={{ color: "var(--gray-400)" }}
-              >
-                {player.name}
-              </div>
-              <div className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm font-medium text-red-500`}>
-                WD
-              </div>
-              <div className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm`} style={{ color: "var(--gray-400)" }}>
-                {player.score}
-              </div>
-              {!isArchived && (
-                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>--</div>
-              )}
-              {!isArchived && (
-                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>--</div>
-              )}
-            </div>
+              player={player}
+              isArchived={isArchived}
+              strikethrough
+              bgStyle={{ background: "rgba(239,68,68,0.04)" }}
+            />
           ))}
 
           {benchPlayers.length > 0 && (
@@ -254,30 +564,7 @@ function TeamCard({
             </div>
           )}
           {benchPlayers.map((player) => (
-            <div
-              key={player.name}
-              className={`grid grid-cols-12 px-3 sm:px-5 py-2.5 items-center border-t`}
-              style={{ borderColor: "var(--gray-50)", opacity: 0.5 }}
-            >
-              <div
-                className={`${isArchived ? "col-span-6" : "col-span-4"} text-xs sm:text-sm truncate`}
-                style={{ color: "var(--gray-500)" }}
-              >
-                {player.name}
-              </div>
-              <div className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm`} style={{ color: "var(--gray-400)" }}>
-                {player.position}
-              </div>
-              <div className={`${isArchived ? "col-span-3" : "col-span-2"} text-center text-xs sm:text-sm`} style={{ color: "var(--gray-400)" }}>
-                {player.score}
-              </div>
-              {!isArchived && (
-                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>{player.thru}</div>
-              )}
-              {!isArchived && (
-                <div className="col-span-2 text-center text-xs sm:text-sm" style={{ color: "var(--gray-400)" }}>{player.today}</div>
-              )}
-            </div>
+            <PlayerRow key={player.name} player={player} isArchived={isArchived} dimmed />
           ))}
         </div>
       )}
@@ -356,6 +643,106 @@ function DraftBoard({ picks, draftType }: { picks: DraftPick[]; draftType: strin
   );
 }
 
+// ── Leaderboard with expandable rows ────────────────────────────────
+
+function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
+  const [expanded, setExpanded] = useState(false);
+  const isMcWd = entry.position === "MC" || entry.position === "WD";
+  const hasData = entry.espnId && entry.espnId > 0;
+  const thruDisplay =
+    entry.thru !== "--" && entry.thru !== "F"
+      ? `(${entry.thru})`
+      : entry.thru === "F"
+        ? "(F)"
+        : "";
+
+  return (
+    <div>
+      <button
+        onClick={() => hasData && setExpanded(!expanded)}
+        className={`w-full grid grid-cols-12 px-3 sm:px-5 py-2 items-center border-t ${isMcWd ? "opacity-50" : ""} ${hasData ? "cursor-pointer" : "cursor-default"}`}
+        style={{ borderColor: "var(--gray-50)", background: "white" }}
+      >
+        <div
+          className="col-span-1 text-center text-xs sm:text-sm font-medium tabular-nums"
+          style={{ color: "var(--gray-900)" }}
+        >
+          {entry.position}
+        </div>
+        <div
+          className="col-span-5 text-xs sm:text-sm truncate text-left flex items-center gap-1"
+          style={{ color: "var(--gray-900)" }}
+        >
+          {expanded && hasData && (
+            <img
+              src={headshotUrl(entry.espnId!)}
+              alt=""
+              className="w-8 h-6 object-cover rounded flex-shrink-0"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+          <span className="truncate">{entry.name}</span>
+          {entry.isPoolPlayer && (
+            <span className="text-[10px] flex-shrink-0" style={{ color: "var(--green)" }}>
+              ●
+            </span>
+          )}
+          {hasData && (
+            <svg
+              className={`w-3 h-3 flex-shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+              style={{ color: "var(--gray-300)" }}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          )}
+        </div>
+        <div
+          className="col-span-3 text-center text-xs sm:text-sm font-medium tabular-nums"
+          style={{ color: "var(--gray-900)" }}
+        >
+          {entry.score}
+        </div>
+        <div
+          className="col-span-3 text-center text-xs sm:text-sm tabular-nums"
+          style={{ color: "var(--gray-900)" }}
+        >
+          <span className={entry.today.startsWith("-") ? "text-red-600" : ""}>
+            {entry.today}
+          </span>
+          {thruDisplay && (
+            <span className="ml-1" style={{ color: "var(--gray-400)" }}>
+              {thruDisplay}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {expanded && hasData && (
+        <div
+          className="border-t"
+          style={{ borderColor: "var(--gray-100)", background: "var(--gray-50)" }}
+        >
+          {entry.scorecard && entry.scorecard.length > 0 && (
+            <div>
+              <div className="px-4 pt-3 pb-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>
+                  Scorecard
+                </span>
+              </div>
+              <ScorecardView scorecard={entry.scorecard} />
+            </div>
+          )}
+          <PlayerProfile espnId={entry.espnId!} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
   return (
     <div
@@ -371,62 +758,9 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
         <div className="col-span-3 text-center">Score</div>
         <div className="col-span-3 text-center">Today</div>
       </div>
-      {entries.map((entry) => {
-        const isMcWd = entry.position === "MC" || entry.position === "WD";
-        const thruDisplay =
-          entry.thru !== "--" && entry.thru !== "F"
-            ? `(${entry.thru})`
-            : entry.thru === "F"
-              ? "(F)"
-              : "";
-        return (
-          <div
-            key={entry.name}
-            className={`grid grid-cols-12 px-3 sm:px-5 py-2 items-center border-t ${isMcWd ? "opacity-50" : ""}`}
-            style={{
-              borderColor: "var(--gray-50)",
-              background: "white",
-            }}
-          >
-            <div
-              className="col-span-1 text-center text-xs sm:text-sm font-medium tabular-nums"
-              style={{ color: "var(--gray-900)" }}
-            >
-              {entry.position}
-            </div>
-            <div
-              className="col-span-5 text-xs sm:text-sm truncate"
-              style={{ color: "var(--gray-900)" }}
-            >
-              {entry.name}
-              {entry.isPoolPlayer && (
-                <span className="ml-1 text-[10px]" style={{ color: "var(--green)" }}>
-                  ●
-                </span>
-              )}
-            </div>
-            <div
-              className="col-span-3 text-center text-xs sm:text-sm font-medium tabular-nums"
-              style={{ color: "var(--gray-900)" }}
-            >
-              {entry.score}
-            </div>
-            <div
-              className="col-span-3 text-center text-xs sm:text-sm tabular-nums"
-              style={{ color: "var(--gray-900)" }}
-            >
-              <span className={entry.today.startsWith("-") ? "text-red-600" : ""}>
-                {entry.today}
-              </span>
-              {thruDisplay && (
-                <span className="ml-1" style={{ color: "var(--gray-400)" }}>
-                  {thruDisplay}
-                </span>
-              )}
-            </div>
-          </div>
-        );
-      })}
+      {entries.map((entry) => (
+        <LeaderboardRow key={entry.name} entry={entry} />
+      ))}
     </div>
   );
 }
@@ -616,18 +950,11 @@ export default function PoolStandingsPage() {
 
         {/* Standings Tab */}
         {tab === "pool" && (
-          <>
-            <div className="space-y-4">
-              {history.teams.map((team, i) => (
-                <TeamCard key={team.id} team={team} rank={i + 1} isArchived />
-              ))}
-            </div>
-            <div className="text-center mt-8">
-              <p className="text-xs" style={{ color: "var(--gray-400)" }}>
-                Points = sum of player positions (lower is better)
-              </p>
-            </div>
-          </>
+          <div className="space-y-4">
+            {history.teams.map((team, i) => (
+              <TeamCard key={team.id} team={team} rank={i + 1} isArchived />
+            ))}
+          </div>
         )}
 
         {/* Draft Recap Tab */}
@@ -818,13 +1145,6 @@ export default function PoolStandingsPage() {
               </p>
             </div>
           )}
-
-          <div className="text-center mt-8">
-            <p className="text-xs" style={{ color: "var(--gray-400)" }}>
-              Points = sum of player positions (lower is better) · Updates every
-              5 min
-            </p>
-          </div>
         </>
       )}
 
