@@ -230,15 +230,34 @@ export async function GET() {
     for (const c of competitors) {
       const match = findPoolMatch(c.athlete.displayName);
       if (match) {
+        const pos = positionMap.get(c.athlete.displayName.toLowerCase()) || "--";
+        const mc = pos === "MC";
+        const wd = pos === "WD" || pos === "DQ";
+
+        // For MC/WD players, calculate actual score from round data
+        let score = c.score || "E";
+        if ((mc || wd) && (score === "CUT" || score === "MC" || score === "WD")) {
+          let total = 0;
+          let hasData = false;
+          for (const round of c.linescores || []) {
+            const num = parseInt((round.displayValue || "").replace("E", "0"));
+            if (!isNaN(num)) { total += num; hasData = true; }
+          }
+          if (hasData) score = total === 0 ? "E" : total > 0 ? `+${total}` : String(total);
+          else score = "--";
+        }
+
         playerScores[match] = {
-          position: positionMap.get(c.athlete.displayName.toLowerCase()) || "--",
-          score: c.score || "E",
-          thru: getThru(c, currentRound),
-          today: getTodayScore(c, currentRound),
+          position: pos,
+          score,
+          thru: mc ? "MC" : getThru(c, currentRound),
+          today: mc ? "--" : getTodayScore(c, currentRound),
           order: c.order,
         };
       }
     }
+
+    const fieldSize = competitors.length;
 
     // Build team results
     const teams = POOL_DATA.teams.map((team) => {
@@ -263,12 +282,13 @@ export async function GET() {
         if (!isNaN(scoreNum)) {
           totalScore += scoreNum;
         }
-        const posNum = parseInt(p.position.replace("T", ""));
-        if (!isNaN(posNum)) {
-          positionSum += posNum;
+        if (p.position === "MC" || p.position === "WD" || p.position === "DQ") {
+          positionSum += fieldSize;
         } else {
-          const scores = playerScores[p.name.toLowerCase()];
-          positionSum += scores?.order || 999;
+          const posNum = parseInt(p.position.replace("T", ""));
+          if (!isNaN(posNum)) {
+            positionSum += posNum;
+          }
         }
       }
 

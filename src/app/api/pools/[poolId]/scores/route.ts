@@ -78,6 +78,36 @@ function isWithdrawn(c: ESPNCompetitor): boolean {
   return s === "wd" || s === "withdrawn" || c.score === "WD";
 }
 
+// Get a MC/WD player's actual score from their completed rounds
+function getActualScore(c: ESPNCompetitor): string {
+  // ESPN sometimes keeps the numeric score even for MC players
+  const s = c.score;
+  if (s && s !== "CUT" && s !== "MC" && s !== "WD") {
+    return s;
+  }
+  // Fall back to summing round scores from linescores
+  if (!c.linescores?.length) return "--";
+  let total = 0;
+  let hasData = false;
+  for (const round of c.linescores) {
+    if (round.value) {
+      // round.value is strokes for the round, convert to relative par
+      // round.displayValue is relative to par (e.g. "+3", "-1", "E")
+      const display = round.displayValue;
+      if (display) {
+        const num = parseInt(display.replace("E", "0"));
+        if (!isNaN(num)) {
+          total += num;
+          hasData = true;
+        }
+      }
+    }
+  }
+  if (!hasData) return "--";
+  if (total === 0) return "E";
+  return total > 0 ? `+${total}` : String(total);
+}
+
 function computePositions(competitors: ESPNCompetitor[]): Map<string, string> {
   const positions = new Map<string, string>();
   const active: ESPNCompetitor[] = [];
@@ -241,6 +271,8 @@ export async function GET(
   }
 
   // 5. Build team standings
+  const fieldSize = competitors.length;
+
   const teams = userIds.map((uid) => {
     const playerNames = teamPicks.get(uid) || [];
     const players = playerNames.map((name) => {
@@ -249,13 +281,26 @@ export async function GET(
         return { name, position: "--", score: "--", thru: "--", today: "--", isActive: true };
       }
       const pos = positionMap.get(espn.athlete.displayName.toLowerCase()) || "--";
+      const mc = pos === "MC";
+      const wd = pos === "WD" || pos === "DQ";
+
+      // For MC players, use their actual 2-round score
+      let score = "--";
+      if (tournamentStarted) {
+        if (mc || wd) {
+          score = getActualScore(espn);
+        } else {
+          score = espn.score || "E";
+        }
+      }
+
       return {
         name,
-        position: pos,
-        score: tournamentStarted ? (espn.score || "E") : "--",
-        thru: tournamentStarted ? getThru(espn, currentRound) : "--",
-        today: tournamentStarted ? getTodayScore(espn, currentRound) : "--",
-        isActive: pos !== "WD" && pos !== "DQ" && pos !== "MC",
+        position: mc ? "MC" : wd ? pos : pos,
+        score,
+        thru: tournamentStarted ? (mc ? "MC" : getThru(espn, currentRound)) : "--",
+        today: tournamentStarted ? (mc ? "--" : getTodayScore(espn, currentRound)) : "--",
+        isActive: !mc && !wd,
       };
     });
 
@@ -268,12 +313,14 @@ export async function GET(
       if (!isNaN(scoreNum)) {
         totalScore += scoreNum;
       }
-      const posNum = parseInt(p.position.replace("T", ""));
-      if (!isNaN(posNum)) {
-        positionSum += posNum;
-      } else if (p.position !== "--") {
-        const espn = findEspnMatch(p.name);
-        positionSum += espn?.order || 999;
+      if (p.position === "MC" || p.position === "WD" || p.position === "DQ") {
+        // MC/WD = last place in the field
+        positionSum += fieldSize;
+      } else {
+        const posNum = parseInt(p.position.replace("T", ""));
+        if (!isNaN(posNum)) {
+          positionSum += posNum;
+        }
       }
     }
 
