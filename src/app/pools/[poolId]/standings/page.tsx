@@ -245,25 +245,6 @@ function ScorecardView({ scorecard }: { scorecard: ScorecardRound[] }) {
             </div>
           )}
 
-          {/* Legend */}
-          <div className="flex items-center gap-3 mt-2 px-1">
-            <div className="flex items-center gap-1">
-              <span className="inline-flex items-center justify-center w-4 h-4 text-[8px] rounded-full bg-green-200 text-green-900">3</span>
-              <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>Eagle</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="inline-flex items-center justify-center w-4 h-4 text-[8px] rounded-full bg-green-100 text-green-800">3</span>
-              <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>Birdie</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="inline-flex items-center justify-center w-4 h-4 text-[8px] rounded-sm bg-red-100 text-red-800">5</span>
-              <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>Bogey</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="inline-flex items-center justify-center w-4 h-4 text-[8px] rounded-sm bg-red-200 text-red-900">6</span>
-              <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>Dbl+</span>
-            </div>
-          </div>
         </div>
       )}
     </div>
