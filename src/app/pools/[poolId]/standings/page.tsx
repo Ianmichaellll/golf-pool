@@ -276,9 +276,17 @@ function PlayerProfile({ espnId }: { espnId: number }) {
 
   if (!bio) return null;
 
-  const birthDisplay = bio.birthDate
-    ? new Date(bio.birthDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
-    : "--";
+  // ESPN returns DD/MM/YYYY format — parse manually
+  let birthDisplay = "--";
+  if (bio.birthDate) {
+    const parts = bio.birthDate.split("/");
+    if (parts.length === 3) {
+      const d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      birthDisplay = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    } else {
+      birthDisplay = bio.birthDate;
+    }
+  }
 
   return (
     <div className="px-4 py-3 border-t" style={{ borderColor: "var(--gray-100)" }}>
