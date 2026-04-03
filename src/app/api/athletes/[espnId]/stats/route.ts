@@ -16,11 +16,11 @@ export async function GET(
     const [overviewRes, profileRes] = await Promise.all([
       fetch(`${ESPN_BASE}/${espnId}/overview`, {
         headers: { "User-Agent": "GolfPool/1.0" },
-        next: { revalidate: 3600 },
+        cache: "no-store",
       }),
       fetch(`${ESPN_BASE}/${espnId}`, {
         headers: { "User-Agent": "GolfPool/1.0" },
-        next: { revalidate: 86400 },
+        cache: "no-store",
       }),
     ]);
 
