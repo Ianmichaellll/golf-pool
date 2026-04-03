@@ -77,7 +77,7 @@ export async function GET(
 
     return NextResponse.json(
       { wins, top10s, scoringAvg, earnings, birthDate: dob, birthPlace, college, age },
-      { headers: { "Cache-Control": "public, max-age=3600" } }
+      { headers: { "Cache-Control": "public, max-age=300" } }
     );
   } catch (err) {
     console.error("Athlete stats error:", err);
