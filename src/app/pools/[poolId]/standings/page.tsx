@@ -285,7 +285,7 @@ function PlayerProfile({ espnId }: { espnId: number }) {
       <div className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--gray-400)" }}>
         Profile
       </div>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+      <div className="flex flex-col gap-1.5 text-xs">
         <div>
           <span style={{ color: "var(--gray-400)" }}>Age: </span>
           <span style={{ color: "var(--gray-700)" }}>{bio.age}</span>
@@ -294,7 +294,7 @@ function PlayerProfile({ espnId }: { espnId: number }) {
           <span style={{ color: "var(--gray-400)" }}>College: </span>
           <span style={{ color: "var(--gray-700)" }}>{bio.college}</span>
         </div>
-        <div className="col-span-2">
+        <div>
           <span style={{ color: "var(--gray-400)" }}>Born: </span>
           <span style={{ color: "var(--gray-700)" }}>{birthDisplay}</span>
           {bio.birthPlace !== "--" && (
