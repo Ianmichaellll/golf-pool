@@ -310,7 +310,7 @@ function PlayerProfile({ espnId }: { espnId: number }) {
         {[
           { label: "Wins", value: bio.wins },
           { label: "Top 10s", value: bio.top10s },
-          { label: "Avg", value: bio.scoringAvg },
+          { label: "Scor Avg", value: bio.scoringAvg },
           { label: "Earnings", value: bio.earnings },
         ].map((stat) => (
           <div key={stat.label} className="text-center">
