@@ -35,19 +35,15 @@ export async function GET(
       const stats = data.statistics;
       if (stats) {
         const labels: string[] = stats.labels || [];
-        const statValues =
-          stats.splits?.categories?.[0]?.stats ||
-          stats.stats ||
-          [];
+        // ESPN structure: splits is an array, find the one with stats (usually "PGA TOUR" split)
+        const splits: { displayName?: string; stats?: string[] }[] = stats.splits || [];
+        const pgaSplit = splits.find((s) => s.stats && s.stats.length > 0);
+        const statValues: string[] = pgaSplit?.stats || [];
 
         const labelMap = new Map<string, string>();
         labels.forEach((label: string, i: number) => {
-          const val = statValues[i];
-          if (val) {
-            labelMap.set(
-              label.toUpperCase(),
-              val.displayValue ?? String(val.value ?? "")
-            );
+          if (statValues[i]) {
+            labelMap.set(label.toUpperCase(), statValues[i]);
           }
         });
 
