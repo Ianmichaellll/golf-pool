@@ -260,9 +260,15 @@ function PlayerProfile({ espnId }: { espnId: number }) {
   useEffect(() => {
     if (!espnId) { setLoading(false); return; }
     fetch(`/api/athletes/${espnId}/stats`)
-      .then((r) => r.json())
-      .then((data) => setBio(data))
-      .catch(() => {})
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data) => {
+        console.log(`[Profile ${espnId}]`, data);
+        setBio(data);
+      })
+      .catch((err) => console.error(`[Profile ${espnId}] Error:`, err))
       .finally(() => setLoading(false));
   }, [espnId]);
 
