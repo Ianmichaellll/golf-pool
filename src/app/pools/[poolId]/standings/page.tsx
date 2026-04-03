@@ -9,7 +9,7 @@ import { createClient } from "../../../lib/supabase/client";
 type ScorecardRound = {
   round: number;
   score: string;
-  holes: { hole: number; score: number; par: number }[];
+  holes: { hole: number; score: number; par: number; toPar: number }[];
 };
 
 type PlayerDisplay = {
@@ -104,17 +104,13 @@ function headshotUrl(espnId: number): string {
   return `https://a.espncdn.com/combiner/i?img=/i/headshots/golf/players/full/${espnId}.png&w=96&h=70&cb=1`;
 }
 
-function getHoleScoreStyle(score: number, par: number): string {
-  const diff = score - par;
-  if (diff <= -2) return "bg-yellow-400 text-white rounded-full"; // eagle+
-  if (diff === -1) return "bg-red-500 text-white rounded-full"; // birdie
-  if (diff === 1) return "border border-gray-400 rounded-full"; // bogey
-  if (diff >= 2) return "border-2 border-gray-500 rounded-full"; // double+
+function getHoleScoreClasses(toPar: number): string {
+  if (toPar <= -2) return "rounded-full bg-green-200 text-green-900"; // eagle+
+  if (toPar === -1) return "rounded-full bg-green-100 text-green-800"; // birdie
+  if (toPar === 1) return "rounded-sm bg-red-100 text-red-800"; // bogey
+  if (toPar >= 2) return "rounded-sm bg-red-200 text-red-900"; // double+
   return ""; // par
 }
-
-// Standard par for a typical PGA course (used when par data unavailable)
-const STANDARD_PARS = [4, 4, 3, 4, 5, 4, 3, 4, 5, 4, 4, 3, 4, 5, 4, 3, 4, 5];
 
 // ── Scorecard Component ─────────────────────────────────────────────
 
@@ -135,6 +131,8 @@ function ScorecardView({ scorecard }: { scorecard: ScorecardRound[] }) {
 
   const front9Total = front9.reduce((sum, h) => sum + h.score, 0);
   const back9Total = back9.reduce((sum, h) => sum + h.score, 0);
+  const front9Par = front9.reduce((sum, h) => sum + h.par, 0);
+  const back9Par = back9.reduce((sum, h) => sum + h.par, 0);
 
   return (
     <div>
@@ -171,31 +169,28 @@ function ScorecardView({ scorecard }: { scorecard: ScorecardRound[] }) {
               </tr>
             </thead>
             <tbody>
-              <tr style={{ color: "var(--gray-700)" }}>
+              <tr style={{ color: "var(--gray-500)" }}>
                 <td className="font-semibold py-1 pr-1" style={{ color: "var(--gray-400)" }}>Par</td>
                 {[1,2,3,4,5,6,7,8,9].map((h) => {
                   const hole = front9.find((ho) => ho.hole === h);
-                  const par = hole ? hole.par : STANDARD_PARS[h - 1];
-                  return <td key={h} className="text-center py-1">{par}</td>;
+                  return <td key={h} className="text-center py-1">{hole ? hole.par : "-"}</td>;
                 })}
-                <td className="text-center font-semibold py-1 pl-1">
-                  {front9.reduce((s, h) => s + h.par, 0) || 36}
-                </td>
+                <td className="text-center font-semibold py-1 pl-1">{front9Par || "-"}</td>
               </tr>
-              <tr style={{ color: "var(--gray-900)" }}>
+              <tr>
                 <td className="font-semibold py-1.5 pr-1" style={{ color: "var(--gray-400)" }}>Score</td>
                 {[1,2,3,4,5,6,7,8,9].map((h) => {
                   const hole = front9.find((ho) => ho.hole === h);
-                  if (!hole) return <td key={h} className="text-center py-1.5">-</td>;
+                  if (!hole) return <td key={h} className="text-center py-1.5" style={{ color: "var(--gray-300)" }}>-</td>;
                   return (
                     <td key={h} className="text-center py-1.5">
-                      <span className={`inline-flex items-center justify-center w-5 h-5 text-[10px] sm:text-xs font-medium ${getHoleScoreStyle(hole.score, hole.par)}`}>
+                      <span className={`inline-flex items-center justify-center w-5 h-5 text-[10px] sm:text-xs font-semibold ${getHoleScoreClasses(hole.toPar)}`}>
                         {hole.score}
                       </span>
                     </td>
                   );
                 })}
-                <td className="text-center font-bold py-1.5 pl-1">{front9Total || "-"}</td>
+                <td className="text-center font-bold py-1.5 pl-1" style={{ color: "var(--gray-900)" }}>{front9Total || "-"}</td>
               </tr>
             </tbody>
           </table>
@@ -212,31 +207,28 @@ function ScorecardView({ scorecard }: { scorecard: ScorecardRound[] }) {
               </tr>
             </thead>
             <tbody>
-              <tr style={{ color: "var(--gray-700)" }}>
+              <tr style={{ color: "var(--gray-500)" }}>
                 <td className="font-semibold py-1 pr-1" style={{ color: "var(--gray-400)" }}>Par</td>
                 {[10,11,12,13,14,15,16,17,18].map((h) => {
                   const hole = back9.find((ho) => ho.hole === h);
-                  const par = hole ? hole.par : STANDARD_PARS[h - 1];
-                  return <td key={h} className="text-center py-1">{par}</td>;
+                  return <td key={h} className="text-center py-1">{hole ? hole.par : "-"}</td>;
                 })}
-                <td className="text-center font-semibold py-1 pl-1">
-                  {back9.reduce((s, h) => s + h.par, 0) || 36}
-                </td>
+                <td className="text-center font-semibold py-1 pl-1">{back9Par || "-"}</td>
               </tr>
-              <tr style={{ color: "var(--gray-900)" }}>
+              <tr>
                 <td className="font-semibold py-1.5 pr-1" style={{ color: "var(--gray-400)" }}>Score</td>
                 {[10,11,12,13,14,15,16,17,18].map((h) => {
                   const hole = back9.find((ho) => ho.hole === h);
-                  if (!hole) return <td key={h} className="text-center py-1.5">-</td>;
+                  if (!hole) return <td key={h} className="text-center py-1.5" style={{ color: "var(--gray-300)" }}>-</td>;
                   return (
                     <td key={h} className="text-center py-1.5">
-                      <span className={`inline-flex items-center justify-center w-5 h-5 text-[10px] sm:text-xs font-medium ${getHoleScoreStyle(hole.score, hole.par)}`}>
+                      <span className={`inline-flex items-center justify-center w-5 h-5 text-[10px] sm:text-xs font-semibold ${getHoleScoreClasses(hole.toPar)}`}>
                         {hole.score}
                       </span>
                     </td>
                   );
                 })}
-                <td className="text-center font-bold py-1.5 pl-1">{back9Total || "-"}</td>
+                <td className="text-center font-bold py-1.5 pl-1" style={{ color: "var(--gray-900)" }}>{back9Total || "-"}</td>
               </tr>
             </tbody>
           </table>
@@ -252,6 +244,26 @@ function ScorecardView({ scorecard }: { scorecard: ScorecardRound[] }) {
               </span>
             </div>
           )}
+
+          {/* Legend */}
+          <div className="flex items-center gap-3 mt-2 px-1">
+            <div className="flex items-center gap-1">
+              <span className="inline-flex items-center justify-center w-4 h-4 text-[8px] rounded-full bg-green-200 text-green-900">3</span>
+              <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>Eagle</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="inline-flex items-center justify-center w-4 h-4 text-[8px] rounded-full bg-green-100 text-green-800">3</span>
+              <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>Birdie</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="inline-flex items-center justify-center w-4 h-4 text-[8px] rounded-sm bg-red-100 text-red-800">5</span>
+              <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>Bogey</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="inline-flex items-center justify-center w-4 h-4 text-[8px] rounded-sm bg-red-200 text-red-900">6</span>
+              <span className="text-[9px]" style={{ color: "var(--gray-400)" }}>Dbl+</span>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -330,6 +342,51 @@ function PlayerProfile({ espnId }: { espnId: number }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Expanded Panel with Tabs ────────────────────────────────────────
+
+function ExpandedPlayerPanel({ espnId, scorecard }: { espnId: number; scorecard: ScorecardRound[] }) {
+  const [activeTab, setActiveTab] = useState<"scorecard" | "profile">(scorecard.length > 0 ? "scorecard" : "profile");
+
+  return (
+    <div
+      className="border-t"
+      style={{ borderColor: "var(--gray-100)", background: "var(--gray-50)" }}
+    >
+      {/* Tab buttons */}
+      <div className="flex gap-1 mx-3 mt-2 rounded-md p-0.5" style={{ background: "var(--gray-200)" }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); setActiveTab("scorecard"); }}
+          className="flex-1 py-1.5 text-[10px] sm:text-xs font-semibold rounded transition-colors"
+          style={{
+            background: activeTab === "scorecard" ? "white" : "transparent",
+            color: activeTab === "scorecard" ? "var(--gray-900)" : "var(--gray-500)",
+          }}
+        >
+          Scorecard
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); setActiveTab("profile"); }}
+          className="flex-1 py-1.5 text-[10px] sm:text-xs font-semibold rounded transition-colors"
+          style={{
+            background: activeTab === "profile" ? "white" : "transparent",
+            color: activeTab === "profile" ? "var(--gray-900)" : "var(--gray-500)",
+          }}
+        >
+          Profile
+        </button>
+      </div>
+
+      {/* Tab content */}
+      {activeTab === "scorecard" && (
+        <ScorecardView scorecard={scorecard} />
+      )}
+      {activeTab === "profile" && (
+        <PlayerProfile espnId={espnId} />
+      )}
     </div>
   );
 }
@@ -422,24 +479,10 @@ function PlayerRow({
       </button>
 
       {expanded && hasData && (
-        <div
-          className="border-t"
-          style={{ borderColor: "var(--gray-100)", background: "var(--gray-50)" }}
-        >
-          {/* Scorecard */}
-          {player.scorecard && player.scorecard.length > 0 && (
-            <div>
-              <div className="px-4 pt-3 pb-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>
-                  Scorecard
-                </span>
-              </div>
-              <ScorecardView scorecard={player.scorecard} />
-            </div>
-          )}
-          {/* Profile */}
-          <PlayerProfile espnId={player.espnId!} />
-        </div>
+        <ExpandedPlayerPanel
+          espnId={player.espnId!}
+          scorecard={player.scorecard || []}
+        />
       )}
     </div>
   );
@@ -722,22 +765,10 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
       </button>
 
       {expanded && hasData && (
-        <div
-          className="border-t"
-          style={{ borderColor: "var(--gray-100)", background: "var(--gray-50)" }}
-        >
-          {entry.scorecard && entry.scorecard.length > 0 && (
-            <div>
-              <div className="px-4 pt-3 pb-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--gray-400)" }}>
-                  Scorecard
-                </span>
-              </div>
-              <ScorecardView scorecard={entry.scorecard} />
-            </div>
-          )}
-          <PlayerProfile espnId={entry.espnId!} />
-        </div>
+        <ExpandedPlayerPanel
+          espnId={entry.espnId!}
+          scorecard={entry.scorecard || []}
+        />
       )}
     </div>
   );

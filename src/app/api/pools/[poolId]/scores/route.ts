@@ -10,7 +10,7 @@ type ESPNLinescore = {
   period: number;
   value: number;
   displayValue: string;
-  linescores?: { period: number; value: number; displayValue: string }[];
+  linescores?: { period: number; value: number; displayValue: string; scoreType?: { displayValue?: string } }[];
 };
 
 type ESPNCompetitor = {
@@ -109,18 +109,20 @@ function getActualScore(c: ESPNCompetitor): string {
   return total > 0 ? `+${total}` : String(total);
 }
 
-function buildScorecard(c: ESPNCompetitor): { round: number; score: string; holes: { hole: number; score: number; par: number }[] }[] {
+function buildScorecard(c: ESPNCompetitor): { round: number; score: string; holes: { hole: number; score: number; par: number; toPar: number }[] }[] {
   if (!c.linescores?.length) return [];
   return c.linescores
     .filter((r) => r.linescores && r.linescores.length > 0)
     .map((r) => ({
       round: r.period,
       score: r.displayValue || "--",
-      holes: (r.linescores || []).map((h) => ({
-        hole: h.period,
-        score: h.value,
-        par: h.value - parseInt(h.displayValue || "0"),
-      })),
+      holes: (r.linescores || []).map((h) => {
+        // scoreType.displayValue gives relative to par: "E", "-1", "+1", "-2", etc.
+        const relToPar = parseInt((h.scoreType?.displayValue || "E").replace("E", "0"));
+        const toPar = isNaN(relToPar) ? 0 : relToPar;
+        const par = h.value - toPar;
+        return { hole: h.period, score: h.value, par, toPar };
+      }),
     }));
 }
 
