@@ -1205,7 +1205,7 @@ export default function DraftPage() {
                         className="px-3 pb-3 pt-1 text-xs"
                         style={{ background: "var(--gray-50)" }}
                       >
-                        <div className="grid grid-cols-3 gap-2 mb-2">
+                        <div className="grid grid-cols-2 gap-2 mb-2">
                           <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
                             <p style={{ color: "var(--gray-400)" }}>World Rank</p>
                             <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
@@ -1216,12 +1216,6 @@ export default function DraftPage() {
                             <p style={{ color: "var(--gray-400)" }}>Last Finish</p>
                             <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
                               {player.lastFinish}
-                            </p>
-                          </div>
-                          <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
-                            <p style={{ color: "var(--gray-400)" }}>Country</p>
-                            <p className="text-sm font-semibold" style={{ color: "var(--gray-900)" }}>
-                              {player.country || "--"}
                             </p>
                           </div>
                         </div>
