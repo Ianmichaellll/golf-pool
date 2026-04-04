@@ -1371,78 +1371,152 @@ export default function DraftPage() {
               queue.map((name, idx) => {
                 const drafted = pickedGolfers.has(name);
                 const player = playerMap.current.get(name);
+                const isExpanded = !drafted && expandedPlayer === name;
                 return (
                   <div
                     key={name}
-                    className="px-3 py-2 flex items-center justify-between border-b"
-                    style={{
-                      borderColor: "var(--gray-50)",
-                      opacity: drafted ? 0.4 : 1,
-                    }}
+                    className="border-b"
+                    style={{ borderColor: "var(--gray-50)" }}
                   >
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div
+                      className="px-3 py-2 flex items-center justify-between"
+                      style={{ opacity: drafted ? 0.4 : 1 }}
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        {!drafted && (
+                          <div className="flex flex-col gap-0.5 shrink-0">
+                            <button
+                              onClick={() => moveInQueue(idx, idx - 1)}
+                              disabled={idx === 0}
+                              className="text-[10px] leading-none px-1.5 py-0.5"
+                              style={{ color: idx === 0 ? "var(--gray-200)" : "var(--gray-400)" }}
+                            >
+                              ▲
+                            </button>
+                            <button
+                              onClick={() => moveInQueue(idx, idx + 1)}
+                              disabled={idx === queue.length - 1}
+                              className="text-[10px] leading-none px-1.5 py-0.5"
+                              style={{ color: idx === queue.length - 1 ? "var(--gray-200)" : "var(--gray-400)" }}
+                            >
+                              ▼
+                            </button>
+                          </div>
+                        )}
+                        <span
+                          className="w-5 text-center text-xs font-semibold shrink-0"
+                          style={{ color: "var(--gray-400)" }}
+                        >
+                          {idx + 1}
+                        </span>
+                        <button
+                          onClick={() => player && !drafted && handleExpandPlayer(player)}
+                          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                          disabled={drafted || !player}
+                        >
+                          <HeadshotImg
+                            espnId={player?.espnId || 0}
+                            name={name}
+                            size={28}
+                          />
+                          <div className="min-w-0">
+                            <p
+                              className={`text-sm font-medium truncate ${drafted ? "line-through" : ""}`}
+                              style={{ color: drafted ? "var(--gray-400)" : "var(--gray-900)" }}
+                            >
+                              {name}
+                            </p>
+                            {player && (
+                              <p className="text-[10px]" style={{ color: "var(--gray-400)" }}>
+                                {player.odds || `#${player.rank}`} &middot; {player.country}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      </div>
                       {!drafted && (
-                        <div className="flex flex-col gap-0.5 shrink-0">
+                        <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                          {isMyTurn && phase === "active" && player && (
+                            <button
+                              onClick={() => handlePick(player)}
+                              disabled={picking}
+                              className="px-3 py-1 rounded-lg text-xs font-semibold text-white"
+                              style={{
+                                background: "var(--green)",
+                                opacity: picking ? 0.5 : 1,
+                              }}
+                            >
+                              {picking ? "..." : "Pick"}
+                            </button>
+                          )}
                           <button
-                            onClick={() => moveInQueue(idx, idx - 1)}
-                            disabled={idx === 0}
-                            className="text-[10px] leading-none px-1.5 py-0.5"
-                            style={{ color: idx === 0 ? "var(--gray-200)" : "var(--gray-400)" }}
+                            onClick={() => removeFromQueue(name)}
+                            className="w-6 h-6 flex items-center justify-center rounded text-xs text-red-400"
+                            title="Remove"
                           >
-                            ▲
-                          </button>
-                          <button
-                            onClick={() => moveInQueue(idx, idx + 1)}
-                            disabled={idx === queue.length - 1}
-                            className="text-[10px] leading-none px-1.5 py-0.5"
-                            style={{ color: idx === queue.length - 1 ? "var(--gray-200)" : "var(--gray-400)" }}
-                          >
-                            ▼
+                            ✕
                           </button>
                         </div>
                       )}
-                      <span
-                        className="w-5 text-center text-xs font-semibold shrink-0"
-                        style={{ color: "var(--gray-400)" }}
-                      >
-                        {idx + 1}
-                      </span>
-                      <HeadshotImg
-                        espnId={player?.espnId || 0}
-                        name={name}
-                        size={28}
-                      />
-                      <p
-                        className={`text-sm font-medium truncate ${drafted ? "line-through" : ""}`}
-                        style={{ color: drafted ? "var(--gray-400)" : "var(--gray-900)" }}
-                      >
-                        {name}
-                      </p>
                     </div>
-                    {!drafted && (
-                      <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                        {isMyTurn && phase === "active" && player && (
-                          <button
-                            onClick={() => handlePick(player)}
-                            disabled={picking}
-                            className="px-3 py-1 rounded-lg text-xs font-semibold text-white"
-                            style={{
-                              background: "var(--green)",
-                              opacity: picking ? 0.5 : 1,
-                            }}
-                          >
-                            {picking ? "..." : "Pick"}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => removeFromQueue(name)}
-                          className="w-6 h-6 flex items-center justify-center rounded text-xs text-red-400"
-                          title="Remove"
+                    {/* Expanded player info */}
+                    {isExpanded && player && (() => {
+                      const stats = playerStats[player.espnId];
+                      const isLoading = loadingStats[player.espnId];
+                      return (
+                        <div
+                          className="px-3 pb-3 pt-1 text-xs"
+                          style={{ background: "var(--gray-50)" }}
                         >
-                          ✕
-                        </button>
-                      </div>
-                    )}
+                          <div className="grid grid-cols-2 gap-2 mb-2">
+                            <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
+                              <p style={{ color: "var(--gray-400)" }}>World Rank</p>
+                              <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
+                                {player.worldRank ? `#${player.worldRank}` : "--"}
+                              </p>
+                            </div>
+                            <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
+                              <p style={{ color: "var(--gray-400)" }}>Last Finish</p>
+                              <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
+                                {player.lastFinish}
+                              </p>
+                            </div>
+                          </div>
+                          {isLoading ? (
+                            <p className="text-center py-2" style={{ color: "var(--gray-400)" }}>
+                              Loading stats...
+                            </p>
+                          ) : stats ? (
+                            <div className="grid grid-cols-4 gap-2">
+                              <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
+                                <p style={{ color: "var(--gray-400)" }}>Wins</p>
+                                <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
+                                  {stats.wins}
+                                </p>
+                              </div>
+                              <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
+                                <p style={{ color: "var(--gray-400)" }}>Top 10s</p>
+                                <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
+                                  {stats.top10s}
+                                </p>
+                              </div>
+                              <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
+                                <p style={{ color: "var(--gray-400)" }}>Avg</p>
+                                <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
+                                  {stats.scoringAvg}
+                                </p>
+                              </div>
+                              <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
+                                <p style={{ color: "var(--gray-400)" }}>Earnings</p>
+                                <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
+                                  {stats.earnings}
+                                </p>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })
