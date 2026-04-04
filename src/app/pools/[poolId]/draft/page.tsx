@@ -1368,51 +1368,49 @@ export default function DraftPage() {
                 </p>
               </div>
             ) : (
-              queue.map((name, idx) => {
-                const drafted = pickedGolfers.has(name);
+              queue.filter((n) => !pickedGolfers.has(n)).map((name, filteredIdx) => {
                 const player = playerMap.current.get(name);
-                const isExpanded = !drafted && expandedPlayer === name;
+                const isExpanded = expandedPlayer === name;
+                const realIdx = queue.indexOf(name);
+                const filteredQueue = queue.filter((n) => !pickedGolfers.has(n));
+                const isFirst = filteredIdx === 0;
+                const isLast = filteredIdx === filteredQueue.length - 1;
                 return (
                   <div
                     key={name}
                     className="border-b"
                     style={{ borderColor: "var(--gray-50)" }}
                   >
-                    <div
-                      className="px-3 py-2 flex items-center justify-between"
-                      style={{ opacity: drafted ? 0.4 : 1 }}
-                    >
+                    <div className="px-3 py-2 flex items-center justify-between">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
-                        {!drafted && (
-                          <div className="flex flex-col gap-0.5 shrink-0">
-                            <button
-                              onClick={() => moveInQueue(idx, idx - 1)}
-                              disabled={idx === 0}
-                              className="text-[10px] leading-none px-1.5 py-0.5"
-                              style={{ color: idx === 0 ? "var(--gray-200)" : "var(--gray-400)" }}
-                            >
-                              ▲
-                            </button>
-                            <button
-                              onClick={() => moveInQueue(idx, idx + 1)}
-                              disabled={idx === queue.length - 1}
-                              className="text-[10px] leading-none px-1.5 py-0.5"
-                              style={{ color: idx === queue.length - 1 ? "var(--gray-200)" : "var(--gray-400)" }}
-                            >
-                              ▼
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex flex-col gap-0.5 shrink-0">
+                          <button
+                            onClick={() => moveInQueue(realIdx, realIdx - 1)}
+                            disabled={isFirst}
+                            className="text-[10px] leading-none px-1.5 py-0.5"
+                            style={{ color: isFirst ? "var(--gray-200)" : "var(--gray-400)" }}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            onClick={() => moveInQueue(realIdx, realIdx + 1)}
+                            disabled={isLast}
+                            className="text-[10px] leading-none px-1.5 py-0.5"
+                            style={{ color: isLast ? "var(--gray-200)" : "var(--gray-400)" }}
+                          >
+                            ▼
+                          </button>
+                        </div>
                         <span
                           className="w-5 text-center text-xs font-semibold shrink-0"
                           style={{ color: "var(--gray-400)" }}
                         >
-                          {idx + 1}
+                          {filteredIdx + 1}
                         </span>
                         <button
-                          onClick={() => player && !drafted && handleExpandPlayer(player)}
+                          onClick={() => player && handleExpandPlayer(player)}
                           className="flex items-center gap-2 flex-1 min-w-0 text-left"
-                          disabled={drafted || !player}
+                          disabled={!player}
                         >
                           <HeadshotImg
                             espnId={player?.espnId || 0}
@@ -1421,8 +1419,8 @@ export default function DraftPage() {
                           />
                           <div className="min-w-0">
                             <p
-                              className={`text-sm font-medium truncate ${drafted ? "line-through" : ""}`}
-                              style={{ color: drafted ? "var(--gray-400)" : "var(--gray-900)" }}
+                              className="text-sm font-medium truncate"
+                              style={{ color: "var(--gray-900)" }}
                             >
                               {name}
                             </p>
@@ -1434,30 +1432,28 @@ export default function DraftPage() {
                           </div>
                         </button>
                       </div>
-                      {!drafted && (
-                        <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                          {isMyTurn && phase === "active" && player && (
-                            <button
-                              onClick={() => handlePick(player)}
-                              disabled={picking}
-                              className="px-3 py-1 rounded-lg text-xs font-semibold text-white"
-                              style={{
-                                background: "var(--green)",
-                                opacity: picking ? 0.5 : 1,
-                              }}
-                            >
-                              {picking ? "..." : "Pick"}
-                            </button>
-                          )}
+                      <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                        {isMyTurn && phase === "active" && player && (
                           <button
-                            onClick={() => removeFromQueue(name)}
-                            className="w-6 h-6 flex items-center justify-center rounded text-xs text-red-400"
-                            title="Remove"
+                            onClick={() => handlePick(player)}
+                            disabled={picking}
+                            className="px-3 py-1 rounded-lg text-xs font-semibold text-white"
+                            style={{
+                              background: "var(--green)",
+                              opacity: picking ? 0.5 : 1,
+                            }}
                           >
-                            ✕
+                            {picking ? "..." : "Pick"}
                           </button>
-                        </div>
-                      )}
+                        )}
+                        <button
+                          onClick={() => removeFromQueue(name)}
+                          className="w-6 h-6 flex items-center justify-center rounded text-xs text-red-400"
+                          title="Remove"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                     {/* Expanded player info */}
                     {isExpanded && player && (() => {

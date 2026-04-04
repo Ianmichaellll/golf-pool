@@ -142,8 +142,8 @@ async function fetchWorldRankings(): Promise<Map<string, number>> {
   return rankMap;
 }
 
-// Fetch tournament odds from Bovada (free, no auth, all PGA events)
-async function fetchOdds(): Promise<Map<string, string>> {
+// Fetch tournament odds from Bovada, matched to a specific tournament name
+async function fetchOdds(tournamentName: string): Promise<Map<string, string>> {
   const oddsMap = new Map<string, string>();
 
   try {
@@ -154,28 +154,42 @@ async function fetchOdds(): Promise<Map<string, string>> {
     if (!res.ok) return oddsMap;
 
     const data = await res.json();
+    const normTournament = normalizeForMatch(tournamentName);
 
     // Bovada structure: array of event groups → events[] → displayGroups[] → markets[] → outcomes[]
-    // Find the "Winner" market in the first PGA event
-    const events = data?.[0]?.events || [];
-    for (const event of events) {
-      const groups = event.displayGroups || [];
-      for (const group of groups) {
-        const markets = group.markets || [];
-        for (const market of markets) {
-          if (
-            market.description?.toLowerCase() === "winner" ||
-            market.description?.toLowerCase() === "outright winner"
-          ) {
-            for (const outcome of market.outcomes || []) {
-              const name = normalizeForMatch(outcome.description || "");
-              const american = outcome.price?.american || "";
-              if (name && american) {
-                oddsMap.set(name, american);
-              }
+    // Match by tournament name, then fall back to first event with a Winner market
+    const allEvents: { description: string; displayGroups: { markets: { description?: string; outcomes?: { description?: string; price?: { american?: string } }[] }[] }[] }[] = [];
+    for (const group of data || []) {
+      for (const ev of group.events || []) {
+        allEvents.push(ev);
+      }
+    }
+
+    // Try exact match first, then partial match, then first available
+    const matchedEvent =
+      allEvents.find((ev) => normalizeForMatch(ev.description) === normTournament) ||
+      allEvents.find((ev) => {
+        const normEv = normalizeForMatch(ev.description);
+        // Check if key words overlap (e.g. "valero texas open" matches "Valero Texas Open")
+        const tourneyWords = normTournament.split(" ").filter((w) => w.length > 3);
+        return tourneyWords.length > 0 && tourneyWords.every((w) => normEv.includes(w));
+      }) ||
+      allEvents[0];
+
+    if (!matchedEvent) return oddsMap;
+
+    for (const group of matchedEvent.displayGroups || []) {
+      for (const market of group.markets || []) {
+        const desc = (market.description || "").toLowerCase();
+        if (desc === "winner" || desc === "outright winner" || desc === "winner live") {
+          for (const outcome of market.outcomes || []) {
+            const name = normalizeForMatch(outcome.description || "");
+            const american = outcome.price?.american || "";
+            if (name && american) {
+              oddsMap.set(name, american);
             }
-            if (oddsMap.size > 0) return oddsMap;
           }
+          if (oddsMap.size > 0) return oddsMap;
         }
       }
     }
@@ -193,10 +207,9 @@ export async function GET(
   const { eventId } = await params;
 
   try {
-    // 1. Fetch current event field + odds + world rankings in parallel
-    const [eventRes, oddsMap, worldRankMap] = await Promise.all([
+    // 1. Fetch current event field + world rankings in parallel
+    const [eventRes, worldRankMap] = await Promise.all([
       fetch(`${ESPN_BASE}?event=${eventId}`, { next: { revalidate: 600 } }),
-      fetchOdds(),
       fetchWorldRankings(),
     ]);
     if (!eventRes.ok) throw new Error(`ESPN API error: ${eventRes.status}`);
@@ -207,8 +220,29 @@ export async function GET(
       return NextResponse.json({ players: [], eventName: "" });
     }
 
+    // Verify ESPN returned the correct event (it ignores future event IDs)
+    const returnedEventId = String(event.id || "");
+    const isCorrectEvent = returnedEventId === String(eventId);
+
+    if (!isCorrectEvent) {
+      // ESPN doesn't have this event's field yet — return empty
+      // The calendar name can be fetched from the calendar entries
+      const calendar = eventData.leagues?.[0]?.calendar ?? [];
+      const calEntry = calendar.find((e: { id: string; label: string }) => String(e.id) === String(eventId));
+      return NextResponse.json({
+        players: [],
+        eventName: calEntry?.label || "",
+        fieldNotAvailable: true,
+        eventId,
+      });
+    }
+
     const competitors: ESPNCompetitor[] =
       event.competitions[0].competitors || [];
+
+    // Now fetch odds matched to this specific tournament name
+    const eventName = event.name || event.shortName || "";
+    const oddsMap = await fetchOdds(eventName);
 
     // 2. Try to get previous event results for "last finish"
     const lastFinishMap = new Map<string, string>();

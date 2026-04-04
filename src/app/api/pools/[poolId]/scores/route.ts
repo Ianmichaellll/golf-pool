@@ -23,6 +23,7 @@ type ESPNCompetitor = {
 };
 
 type ESPNEvent = {
+  id?: string;
   name: string;
   shortName: string;
   competitions: {
@@ -245,7 +246,12 @@ export async function GET(
       if (res.ok) {
         const data = await res.json();
         const event: ESPNEvent | undefined = data.events?.[0];
-        if (event?.competitions?.[0]) {
+        // Verify ESPN returned the correct event (it ignores future event IDs)
+        const returnedId = event?.id;
+        const isCorrectEvent = returnedId
+          ? String(returnedId) === String(pool.espn_event_id)
+          : true; // if no id field, trust it
+        if (isCorrectEvent && event?.competitions?.[0]) {
           competitors = event.competitions[0].competitors || [];
           eventName = event.name || event.shortName || pool.tournament;
           eventStatus =
@@ -253,6 +259,9 @@ export async function GET(
             event.competitions[0].status?.type?.description ||
             "In Progress";
           currentRound = getTournamentRound(competitors);
+        } else if (!isCorrectEvent) {
+          // ESPN returned a different event — tournament hasn't started on ESPN yet
+          eventStatus = "Scheduled";
         }
       }
     } catch (err) {

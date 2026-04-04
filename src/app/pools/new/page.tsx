@@ -9,6 +9,7 @@ type Tournament = {
   name: string;
   startDate: string;
   endDate: string;
+  fieldAvailable: boolean;
 };
 
 export default function CreatePoolPage() {
@@ -40,17 +41,14 @@ export default function CreatePoolPage() {
         const data = await res.json();
         if (data.tournaments?.length) {
           setTournaments(data.tournaments);
-          // Default to the next upcoming tournament
+          // Default to the next upcoming tournament with a field available
           const now = new Date();
           const upcoming = data.tournaments.find(
-            (t: Tournament) => new Date(t.endDate) >= now
+            (t: Tournament) => new Date(t.endDate) >= now && t.fieldAvailable
           );
           if (upcoming) {
             setSelectedEventId(upcoming.id);
             setSelectedEventName(upcoming.name);
-          } else {
-            setSelectedEventId(data.tournaments[0].id);
-            setSelectedEventName(data.tournaments[0].name);
           }
         }
       } catch (err) {
@@ -174,18 +172,27 @@ export default function CreatePoolPage() {
               Loading PGA Tour schedule...
             </p>
           ) : (
-            <select
-              value={selectedEventId}
-              onChange={(e) => handleTournamentChange(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
-            >
-              {tournaments.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({formatDate(t.startDate)})
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                value={selectedEventId}
+                onChange={(e) => handleTournamentChange(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border text-sm"
+                style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
+              >
+                {tournaments
+                  .filter((t) => new Date(t.endDate) >= new Date())
+                  .map((t) => (
+                    <option key={t.id} value={t.id} disabled={!t.fieldAvailable}>
+                      {t.name} ({formatDate(t.startDate)}){!t.fieldAvailable ? " — Field not available yet" : ""}
+                    </option>
+                  ))}
+              </select>
+              {selectedEventId && !tournaments.find((t) => t.id === selectedEventId)?.fieldAvailable && (
+                <p className="text-xs mt-1 text-amber-600">
+                  The player field for this tournament isn&apos;t available on ESPN yet. Check back closer to the event.
+                </p>
+              )}
+            </>
           )}
         </div>
 
@@ -399,11 +406,11 @@ export default function CreatePoolPage() {
 
         <button
           type="submit"
-          disabled={loading || !name || !selectedEventId}
+          disabled={loading || !name || !selectedEventId || !tournaments.find((t) => t.id === selectedEventId)?.fieldAvailable}
           className="w-full py-2.5 rounded-lg text-white text-sm font-semibold"
           style={{
             background: "var(--green)",
-            opacity: loading || !name || !selectedEventId ? 0.5 : 1,
+            opacity: loading || !name || !selectedEventId || !tournaments.find((t) => t.id === selectedEventId)?.fieldAvailable ? 0.5 : 1,
           }}
         >
           {loading ? "Creating..." : "Create Pool"}
