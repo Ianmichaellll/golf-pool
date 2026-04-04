@@ -70,7 +70,7 @@ export default function NavBar() {
     <nav
       className="sticky top-0 z-50 border-b px-4 py-2.5 flex items-center justify-between"
       style={{
-        background: "white",
+        background: "var(--surface)",
         borderColor: "var(--gray-200)",
       }}
     >
@@ -115,7 +115,7 @@ export default function NavBar() {
                 <div
                   className="absolute right-0 top-full mt-1 w-48 rounded-lg border shadow-lg py-1"
                   style={{
-                    background: "white",
+                    background: "var(--surface)",
                     borderColor: "var(--gray-200)",
                   }}
                 >
@@ -127,6 +127,14 @@ export default function NavBar() {
                       {user.email}
                     </p>
                   </div>
+                  <a
+                    href="/settings"
+                    className="block w-full text-left px-3 py-2 text-sm"
+                    style={{ color: "var(--gray-700)" }}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Settings
+                  </a>
                   <button
                     onClick={handleSignOut}
                     className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"

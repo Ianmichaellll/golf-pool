@@ -91,7 +91,7 @@ export default function PoolsPage() {
       {pools.length === 0 ? (
         <div
           className="text-center py-16 rounded-xl border"
-          style={{ borderColor: "var(--gray-200)", background: "white" }}
+          style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
         >
           <p className="text-lg font-medium mb-2" style={{ color: "var(--gray-700)" }}>
             No pools yet
@@ -121,7 +121,7 @@ export default function PoolsPage() {
                       key={pool.id}
                       onClick={() => router.push(pool.status === "open" ? `/pools/${pool.id}` : `/pools/${pool.id}/standings`)}
                       className="w-full text-left rounded-xl border p-4 transition-shadow hover:shadow-md"
-                      style={{ borderColor: "var(--gray-200)", background: "white" }}
+                      style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
                     >
                       <div className="flex items-start justify-between">
                         <div>
@@ -173,7 +173,7 @@ export default function PoolsPage() {
                         key={pool.id}
                         onClick={() => router.push(`/pools/${pool.id}/standings`)}
                         className="w-full text-left rounded-xl border p-4 transition-shadow hover:shadow-md"
-                        style={{ borderColor: "var(--gray-200)", background: "white" }}
+                        style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
                       >
                         <div className="flex items-start justify-between">
                           <div>

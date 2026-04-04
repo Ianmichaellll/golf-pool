@@ -841,7 +841,7 @@ export default function DraftPage() {
               className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
               style={{
                 borderColor: draft.status === "paused" ? "var(--green)" : "var(--gray-300)",
-                background: draft.status === "paused" ? "var(--green)" : "white",
+                background: draft.status === "paused" ? "var(--green)" : "var(--surface)",
                 color: draft.status === "paused" ? "white" : "var(--gray-600)",
               }}
             >
@@ -853,7 +853,7 @@ export default function DraftPage() {
               className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
               style={{
                 borderColor: "var(--gray-300)",
-                background: "white",
+                background: "var(--surface)",
                 color: draft.current_pick === 0 ? "var(--gray-300)" : "var(--gray-600)",
               }}
             >
@@ -864,7 +864,7 @@ export default function DraftPage() {
               className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
               style={{
                 borderColor: "#ef4444",
-                background: "white",
+                background: "var(--surface)",
                 color: "#ef4444",
               }}
             >
@@ -941,7 +941,7 @@ export default function DraftPage() {
           <button
             onClick={() => window.location.href = `/pools/${poolId}/standings`}
             className="mt-2 px-6 py-2 rounded-lg text-sm font-semibold"
-            style={{ background: "white", color: "var(--green)" }}
+            style={{ background: "var(--surface)", color: "var(--green)" }}
           >
             View Pool
           </button>
@@ -952,7 +952,7 @@ export default function DraftPage() {
       {sideTab !== "teams" && <div className="mb-4 overflow-x-auto">
         <div
           className="rounded-xl border overflow-hidden"
-          style={{ borderColor: "var(--gray-200)", background: "white" }}
+          style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
         >
           <table className="w-full text-xs">
             <thead>
@@ -1032,7 +1032,7 @@ export default function DraftPage() {
                             ? "rgba(34, 139, 34, 0.08)"
                             : pick
                             ? "var(--gray-50)"
-                            : "white",
+                            : "var(--surface)",
                           color: pick
                             ? "var(--gray-900)"
                             : "var(--gray-300)",
@@ -1092,7 +1092,7 @@ export default function DraftPage() {
               onClick={() => setSideTab(tab)}
               className="flex-1 py-2 text-sm font-medium rounded-lg transition-colors"
               style={{
-                background: sideTab === tab ? "white" : "transparent",
+                background: sideTab === tab ? "var(--surface)" : "transparent",
                 color: sideTab === tab ? "var(--gray-900)" : "var(--gray-500)",
                 boxShadow: sideTab === tab ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
               }}
@@ -1107,7 +1107,7 @@ export default function DraftPage() {
       {sideTab === "available" && (
         <div
           className="rounded-xl border overflow-hidden"
-          style={{ borderColor: "var(--gray-200)", background: "white" }}
+          style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
         >
           <div
             className="px-3 py-2 border-b"
@@ -1206,19 +1206,19 @@ export default function DraftPage() {
                         style={{ background: "var(--gray-50)" }}
                       >
                         <div className="grid grid-cols-3 gap-2 mb-2">
-                          <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                          <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
                             <p style={{ color: "var(--gray-400)" }}>World Rank</p>
                             <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
                               {player.worldRank ? `#${player.worldRank}` : "--"}
                             </p>
                           </div>
-                          <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                          <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
                             <p style={{ color: "var(--gray-400)" }}>Last Finish</p>
                             <p className="text-lg font-bold" style={{ color: "var(--gray-900)" }}>
                               {player.lastFinish}
                             </p>
                           </div>
-                          <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                          <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
                             <p style={{ color: "var(--gray-400)" }}>Country</p>
                             <p className="text-sm font-semibold" style={{ color: "var(--gray-900)" }}>
                               {player.country || "--"}
@@ -1231,25 +1231,25 @@ export default function DraftPage() {
                           </p>
                         ) : stats ? (
                           <div className="grid grid-cols-4 gap-2">
-                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                            <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
                               <p style={{ color: "var(--gray-400)" }}>Wins</p>
                               <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
                                 {stats.wins}
                               </p>
                             </div>
-                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                            <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
                               <p style={{ color: "var(--gray-400)" }}>Top 10s</p>
                               <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
                                 {stats.top10s}
                               </p>
                             </div>
-                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                            <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
                               <p style={{ color: "var(--gray-400)" }}>Avg</p>
                               <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
                                 {stats.scoringAvg}
                               </p>
                             </div>
-                            <div className="text-center rounded-lg p-2" style={{ background: "white" }}>
+                            <div className="text-center rounded-lg p-2" style={{ background: "var(--surface)" }}>
                               <p style={{ color: "var(--gray-400)" }}>Earnings</p>
                               <p className="text-sm font-bold" style={{ color: "var(--gray-900)" }}>
                                 {stats.earnings}
@@ -1279,7 +1279,7 @@ export default function DraftPage() {
       {sideTab === "teams" && (
         <div
           className="rounded-xl border overflow-hidden"
-          style={{ borderColor: "var(--gray-200)", background: "white" }}
+          style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
         >
           <div className="max-h-[60vh] overflow-y-auto">
             {columnOrder.map((uid) => {
@@ -1361,7 +1361,7 @@ export default function DraftPage() {
       {sideTab === "queue" && (
         <div
           className="rounded-xl border overflow-hidden"
-          style={{ borderColor: "var(--gray-200)", background: "white" }}
+          style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
         >
           <div className="max-h-[60vh] overflow-y-auto">
             {queue.length === 0 ? (
@@ -1461,7 +1461,7 @@ export default function DraftPage() {
       {picks.length > 0 && (
         <div
           className="rounded-xl border mt-4 overflow-hidden"
-          style={{ borderColor: "var(--gray-200)", background: "white" }}
+          style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
         >
           <div
             className="px-3 py-2 border-b"

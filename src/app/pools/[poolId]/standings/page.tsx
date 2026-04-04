@@ -264,10 +264,7 @@ function PlayerProfile({ espnId }: { espnId: number }) {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((data) => {
-        console.log(`[Profile ${espnId}]`, data);
-        setBio(data);
-      })
+      .then((data) => setBio(data))
       .catch((err) => console.error(`[Profile ${espnId}] Error:`, err))
       .finally(() => setLoading(false));
   }, [espnId]);
@@ -357,7 +354,7 @@ function ExpandedPlayerPanel({ espnId, scorecard }: { espnId: number; scorecard:
           onClick={(e) => { e.stopPropagation(); setActiveTab("scorecard"); }}
           className="flex-1 py-1.5 text-[10px] sm:text-xs font-semibold rounded transition-colors"
           style={{
-            background: activeTab === "scorecard" ? "white" : "transparent",
+            background: activeTab === "scorecard" ? "var(--surface)" : "transparent",
             color: activeTab === "scorecard" ? "var(--gray-900)" : "var(--gray-500)",
           }}
         >
@@ -367,7 +364,7 @@ function ExpandedPlayerPanel({ espnId, scorecard }: { espnId: number; scorecard:
           onClick={(e) => { e.stopPropagation(); setActiveTab("profile"); }}
           className="flex-1 py-1.5 text-[10px] sm:text-xs font-semibold rounded transition-colors"
           style={{
-            background: activeTab === "profile" ? "white" : "transparent",
+            background: activeTab === "profile" ? "var(--surface)" : "transparent",
             color: activeTab === "profile" ? "var(--gray-900)" : "var(--gray-500)",
           }}
         >
@@ -509,7 +506,7 @@ function TeamCard({
       className="rounded-xl border overflow-hidden"
       style={{
         borderColor: isWinner ? "var(--green)" : "var(--gray-200)",
-        background: "white",
+        background: "var(--surface)",
         boxShadow: isWinner ? "0 0 0 1px var(--green)" : undefined,
       }}
     >
@@ -622,7 +619,7 @@ function DraftBoard({ picks, draftType }: { picks: DraftPick[]; draftType: strin
   return (
     <div
       className="rounded-xl border overflow-hidden"
-      style={{ borderColor: "var(--gray-200)", background: "white" }}
+      style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
     >
       <div
         className="px-5 py-3 border-b"
@@ -699,7 +696,7 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
       <button
         onClick={() => hasData && setExpanded(!expanded)}
         className={`w-full grid grid-cols-12 px-3 sm:px-5 py-2 items-center border-t ${isMcWd ? "opacity-50" : ""} ${hasData ? "cursor-pointer" : "cursor-default"}`}
-        style={{ borderColor: "var(--gray-50)", background: "white" }}
+        style={{ borderColor: "var(--gray-50)", background: "var(--surface)" }}
       >
         <div
           className="col-span-1 text-center text-xs sm:text-sm font-medium tabular-nums"
@@ -720,11 +717,6 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
             />
           )}
           <span className="truncate">{entry.name}</span>
-          {entry.isPoolPlayer && (
-            <span className="text-[10px] flex-shrink-0" style={{ color: "var(--green)" }}>
-              ●
-            </span>
-          )}
           {hasData && (
             <svg
               className={`w-3 h-3 flex-shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
@@ -773,7 +765,7 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
   return (
     <div
       className="rounded-xl border overflow-hidden"
-      style={{ borderColor: "var(--gray-200)", background: "white" }}
+      style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
     >
       <div
         className="grid grid-cols-12 px-3 sm:px-5 py-2.5 border-b text-[10px] sm:text-xs uppercase tracking-wide"
@@ -934,7 +926,7 @@ export default function PoolStandingsPage() {
 
           <div
             className="inline-flex items-center gap-2 border rounded-full px-4 py-1.5 text-sm"
-            style={{ borderColor: "var(--gray-200)", background: "white" }}
+            style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
           >
             <span className="relative flex h-2 w-2">
               <span className="relative inline-flex rounded-full h-2 w-2 bg-gray-400" />
@@ -954,7 +946,7 @@ export default function PoolStandingsPage() {
               tab === "pool" ? "shadow-sm" : ""
             }`}
             style={{
-              background: tab === "pool" ? "white" : "transparent",
+              background: tab === "pool" ? "var(--surface)" : "transparent",
               color: tab === "pool" ? "var(--gray-900)" : "var(--gray-500)",
             }}
           >
@@ -966,7 +958,7 @@ export default function PoolStandingsPage() {
               tab === "draft" ? "shadow-sm" : ""
             }`}
             style={{
-              background: tab === "draft" ? "white" : "transparent",
+              background: tab === "draft" ? "var(--surface)" : "transparent",
               color: tab === "draft" ? "var(--gray-900)" : "var(--gray-500)",
             }}
           >
@@ -1057,7 +1049,7 @@ export default function PoolStandingsPage() {
 
         <div
           className="inline-flex items-center gap-2 border rounded-full px-4 py-1.5 text-sm"
-          style={{ borderColor: "var(--gray-200)", background: "white" }}
+          style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
         >
           <span className="relative flex h-2 w-2">
             <span
@@ -1092,7 +1084,7 @@ export default function PoolStandingsPage() {
             tab === "pool" ? "shadow-sm" : ""
           }`}
           style={{
-            background: tab === "pool" ? "white" : "transparent",
+            background: tab === "pool" ? "var(--surface)" : "transparent",
             color: tab === "pool" ? "var(--gray-900)" : "var(--gray-500)",
           }}
         >
@@ -1104,7 +1096,7 @@ export default function PoolStandingsPage() {
             tab === "leaderboard" ? "shadow-sm" : ""
           }`}
           style={{
-            background: tab === "leaderboard" ? "white" : "transparent",
+            background: tab === "leaderboard" ? "var(--surface)" : "transparent",
             color: tab === "leaderboard" ? "var(--gray-900)" : "var(--gray-500)",
           }}
         >
@@ -1120,7 +1112,7 @@ export default function PoolStandingsPage() {
               className="rounded-xl border p-4 mb-4 text-center text-sm"
               style={{
                 borderColor: "var(--gray-200)",
-                background: "white",
+                background: "var(--surface)",
                 color: "var(--gray-500)",
               }}
             >
@@ -1130,7 +1122,7 @@ export default function PoolStandingsPage() {
           {data.draftStatus === "active" && (
             <div
               className="rounded-xl border p-4 mb-4 text-center"
-              style={{ borderColor: "var(--gray-200)", background: "white" }}
+              style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
             >
               <p className="text-sm" style={{ color: "var(--gray-500)" }}>
                 Draft is still in progress.
@@ -1160,7 +1152,7 @@ export default function PoolStandingsPage() {
                 style={{
                   borderColor: "var(--green)",
                   color: "var(--green)",
-                  background: "white",
+                  background: "var(--surface)",
                   opacity: finalizing ? 0.5 : 1,
                 }}
               >
@@ -1176,14 +1168,7 @@ export default function PoolStandingsPage() {
 
       {/* Leaderboard Tab */}
       {tab === "leaderboard" && data.leaderboard && (
-        <>
           <LeaderboardTable entries={data.leaderboard} />
-          <div className="text-center mt-4">
-            <p className="text-xs" style={{ color: "var(--gray-400)" }}>
-              <span style={{ color: "var(--green)" }}>●</span> = drafted in this pool
-            </p>
-          </div>
-        </>
       )}
     </div>
   );

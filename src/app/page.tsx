@@ -121,7 +121,7 @@ function LoginForm() {
                   className="w-full px-3 py-2 rounded-lg border text-sm"
                   style={{
                     borderColor: "var(--gray-300)",
-                    background: "white",
+                    background: "var(--surface)",
                   }}
                 />
               </div>
@@ -139,7 +139,7 @@ function LoginForm() {
                   className="w-full px-3 py-2 rounded-lg border text-sm"
                   style={{
                     borderColor: "var(--gray-300)",
-                    background: "white",
+                    background: "var(--surface)",
                   }}
                 />
               </div>
@@ -160,7 +160,7 @@ function LoginForm() {
               className="w-full px-3 py-2 rounded-lg border text-sm"
               style={{
                 borderColor: "var(--gray-300)",
-                background: "white",
+                background: "var(--surface)",
               }}
             />
           </div>
@@ -180,7 +180,7 @@ function LoginForm() {
               className="w-full px-3 py-2 rounded-lg border text-sm"
               style={{
                 borderColor: "var(--gray-300)",
-                background: "white",
+                background: "var(--surface)",
               }}
             />
           </div>

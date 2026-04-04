@@ -228,7 +228,7 @@ export default function PoolLobbyPage() {
       {/* Invite Link */}
       <div
         className="rounded-xl border p-4 mb-6"
-        style={{ borderColor: "var(--gray-200)", background: "white" }}
+        style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
       >
         <p
           className="text-sm font-medium mb-2"
@@ -262,7 +262,7 @@ export default function PoolLobbyPage() {
       {/* Members */}
       <div
         className="rounded-xl border mb-6"
-        style={{ borderColor: "var(--gray-200)", background: "white" }}
+        style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
       >
         <div
           className="px-4 py-3 border-b"
@@ -327,7 +327,7 @@ export default function PoolLobbyPage() {
       {/* Settings Summary */}
       <div
         className="rounded-xl border p-4 mb-6"
-        style={{ borderColor: "var(--gray-200)", background: "white" }}
+        style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
       >
         <p
           className="text-sm font-semibold mb-2"
@@ -408,7 +408,7 @@ export default function PoolLobbyPage() {
             style={{
               borderColor: "var(--gray-200)",
               color: "var(--gray-600)",
-              background: "white",
+              background: "var(--surface)",
             }}
           >
             View Standings

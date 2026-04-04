@@ -157,7 +157,7 @@ export default function CreatePoolPage() {
             placeholder="e.g., The Boys Masters Pool"
             required
             className="w-full px-3 py-2 rounded-lg border text-sm"
-            style={{ borderColor: "var(--gray-300)", background: "white" }}
+            style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
           />
         </div>
 
@@ -178,7 +178,7 @@ export default function CreatePoolPage() {
               value={selectedEventId}
               onChange={(e) => handleTournamentChange(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={{ borderColor: "var(--gray-300)", background: "white" }}
+              style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
             >
               {tournaments.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -208,7 +208,7 @@ export default function CreatePoolPage() {
                   borderColor:
                     draftType === type ? "var(--green)" : "var(--gray-300)",
                   background:
-                    draftType === type ? "var(--green)" : "white",
+                    draftType === type ? "var(--green)" : "var(--surface)",
                   color: draftType === type ? "white" : "var(--gray-700)",
                 }}
               >
@@ -235,7 +235,7 @@ export default function CreatePoolPage() {
             value={numTeams}
             onChange={(e) => setNumTeams(Number(e.target.value))}
             className="w-full px-3 py-2 rounded-lg border text-sm"
-            style={{ borderColor: "var(--gray-300)", background: "white" }}
+            style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
           >
             {Array.from({ length: 13 }, (_, i) => i + 2).map((n) => (
               <option key={n} value={n}>
@@ -257,7 +257,7 @@ export default function CreatePoolPage() {
             value={playersPerTeam}
             onChange={(e) => setPlayersPerTeam(Number(e.target.value))}
             className="w-full px-3 py-2 rounded-lg border text-sm"
-            style={{ borderColor: "var(--gray-300)", background: "white" }}
+            style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
           >
             {[3, 4, 5, 6].map((n) => (
               <option key={n} value={n}>
@@ -279,7 +279,7 @@ export default function CreatePoolPage() {
             value={extrasCount}
             onChange={(e) => setExtrasCount(Number(e.target.value))}
             className="w-full px-3 py-2 rounded-lg border text-sm"
-            style={{ borderColor: "var(--gray-300)", background: "white" }}
+            style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
           >
             {[0, 1, 2, 3].map((n) => (
               <option key={n} value={n}>
@@ -301,7 +301,7 @@ export default function CreatePoolPage() {
             value={timerSeconds}
             onChange={(e) => setTimerSeconds(Number(e.target.value))}
             className="w-full px-3 py-2 rounded-lg border text-sm"
-            style={{ borderColor: "var(--gray-300)", background: "white" }}
+            style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
           >
             <option value={60}>1 minute</option>
             <option value={90}>1.5 minutes</option>
@@ -325,21 +325,21 @@ export default function CreatePoolPage() {
               value={draftDate}
               onChange={(e) => setDraftDate(e.target.value)}
               className="flex-1 px-3 py-2 rounded-lg border text-sm"
-              style={{ borderColor: "var(--gray-300)", background: "white" }}
+              style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
             />
             <input
               type="time"
               value={draftTime}
               onChange={(e) => setDraftTime(e.target.value)}
               className="w-28 px-3 py-2 rounded-lg border text-sm"
-              style={{ borderColor: "var(--gray-300)", background: "white" }}
+              style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
             />
           </div>
           <select
             value={draftTimezone}
             onChange={(e) => setDraftTimezone(e.target.value)}
             className="w-full px-3 py-2 rounded-lg border text-sm mt-2"
-            style={{ borderColor: "var(--gray-300)", background: "white" }}
+            style={{ borderColor: "var(--gray-300)", background: "var(--surface)" }}
           >
             <option value="America/New_York">Eastern (ET)</option>
             <option value="America/Chicago">Central (CT)</option>

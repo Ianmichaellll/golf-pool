@@ -105,7 +105,7 @@ export default function JoinPoolPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div
         className="w-full max-w-sm rounded-xl border p-6 text-center"
-        style={{ borderColor: "var(--gray-200)", background: "white" }}
+        style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
       >
         {status === "loading" && (
           <p style={{ color: "var(--gray-400)" }}>Loading...</p>
