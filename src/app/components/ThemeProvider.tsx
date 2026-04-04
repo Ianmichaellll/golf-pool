@@ -13,28 +13,41 @@ export function useTheme() {
   return useContext(ThemeContext);
 }
 
-export default function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
-  const [mounted, setMounted] = useState(false);
+function getInitialTheme(): Theme {
+  if (typeof window !== "undefined") {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark" || saved === "light") return saved;
+  }
+  return "light";
+}
 
+export default function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
+
+  // Sync the data-theme attribute whenever theme changes
   useEffect(() => {
-    const saved = localStorage.getItem("theme") as Theme | null;
-    if (saved === "dark" || saved === "light") {
-      setThemeState(saved);
-      document.documentElement.setAttribute("data-theme", saved);
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  // Re-sync on bfcache restore (browser back/forward)
+  useEffect(() => {
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) {
+        const saved = localStorage.getItem("theme") as Theme | null;
+        if (saved && saved !== theme) {
+          setThemeState(saved);
+        }
+        document.documentElement.setAttribute("data-theme", saved || theme);
+      }
     }
-    setMounted(true);
-  }, []);
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [theme]);
 
   function setTheme(t: Theme) {
     setThemeState(t);
     localStorage.setItem("theme", t);
     document.documentElement.setAttribute("data-theme", t);
-  }
-
-  // Prevent flash of wrong theme
-  if (!mounted) {
-    return <>{children}</>;
   }
 
   return (
