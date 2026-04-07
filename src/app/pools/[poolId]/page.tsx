@@ -34,6 +34,15 @@ export default function PoolLobbyPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    num_teams: 0,
+    players_per_team: 0,
+    draft_type: "snake",
+    extras_count: 0,
+    timer_seconds: 120,
+  });
+  const [saving, setSaving] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -145,6 +154,50 @@ export default function PoolLobbyPage() {
       .eq("pool_id", poolId)
       .eq("user_id", memberId);
     setMembers(members.filter((m) => m.user_id !== memberId));
+  }
+
+  function startEditing() {
+    if (!pool) return;
+    setEditForm({
+      num_teams: pool.num_teams,
+      players_per_team: pool.players_per_team,
+      draft_type: pool.draft_type,
+      extras_count: pool.extras_count,
+      timer_seconds: pool.timer_seconds,
+    });
+    setEditing(true);
+  }
+
+  async function handleSaveSettings() {
+    if (!pool) return;
+    setSaving(true);
+    const totalPicks =
+      editForm.num_teams * (editForm.players_per_team + editForm.extras_count);
+
+    const { error } = await supabase
+      .from("pools")
+      .update({
+        num_teams: editForm.num_teams,
+        players_per_team: editForm.players_per_team,
+        draft_type: editForm.draft_type,
+        extras_count: editForm.extras_count,
+        timer_seconds: editForm.timer_seconds,
+      })
+      .eq("id", poolId);
+
+    if (!error) {
+      await supabase
+        .from("drafts")
+        .update({ total_picks: totalPicks })
+        .eq("pool_id", poolId);
+
+      setPool({
+        ...pool,
+        ...editForm,
+      });
+      setEditing(false);
+    }
+    setSaving(false);
   }
 
   async function handleStartDraft() {
@@ -329,66 +382,178 @@ export default function PoolLobbyPage() {
         className="rounded-xl border p-4 mb-6"
         style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
       >
-        <p
-          className="text-sm font-semibold mb-2"
-          style={{ color: "var(--gray-900)" }}
-        >
-          Draft Settings
-        </p>
-        <div
-          className="grid grid-cols-2 gap-2 text-sm"
-          style={{ color: "var(--gray-600)" }}
-        >
-          <p>
-            Teams: <span className="font-medium">{pool.num_teams}</span>
-          </p>
-          <p>
-            Players/team:{" "}
-            <span className="font-medium">{pool.players_per_team}</span>
-          </p>
-          <p>
-            Draft type:{" "}
-            <span className="font-medium">
-              {pool.draft_type === "snake" ? "Snake" : "Regular"}
-            </span>
-          </p>
-          <p>
-            Pick timer:{" "}
-            <span className="font-medium">{pool.timer_seconds}s</span>
-          </p>
-          <p>
-            Extra picks:{" "}
-            <span className="font-medium">{pool.extras_count}</span>
-          </p>
-          <p>
-            Total picks:{" "}
-            <span className="font-medium">
-              {pool.num_teams * (pool.players_per_team + pool.extras_count)}
-            </span>
-          </p>
-        </div>
-        {pool.draft_start_time && (
-          <div
-            className="mt-3 pt-3 border-t"
-            style={{ borderColor: "var(--gray-100)" }}
+        <div className="flex items-center justify-between mb-2">
+          <p
+            className="text-sm font-semibold"
+            style={{ color: "var(--gray-900)" }}
           >
-            <p className="text-sm" style={{ color: "var(--gray-700)" }}>
-              Draft starts:{" "}
-              <span
-                className="font-semibold"
-                style={{ color: "var(--green)" }}
+            Draft Settings
+          </p>
+          {isAdmin && pool.status === "open" && !editing && (
+            <button
+              onClick={startEditing}
+              className="text-xs font-medium px-2 py-1 rounded-md"
+              style={{ color: "var(--green)", background: "var(--gray-100)" }}
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        {editing ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs" style={{ color: "var(--gray-500)" }}>Teams</span>
+                <select
+                  value={editForm.num_teams}
+                  onChange={(e) => setEditForm({ ...editForm, num_teams: Number(e.target.value) })}
+                  className="mt-1 w-full px-2 py-1.5 rounded-lg border text-sm"
+                  style={{ borderColor: "var(--gray-200)", background: "var(--gray-50)", color: "var(--gray-800)" }}
+                >
+                  {Array.from({ length: 13 }, (_, i) => i + 2).map((n) => (
+                    <option key={n} value={n} disabled={n < members.length}>
+                      {n}{n < members.length ? ` (${members.length} joined)` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs" style={{ color: "var(--gray-500)" }}>Players/team</span>
+                <select
+                  value={editForm.players_per_team}
+                  onChange={(e) => setEditForm({ ...editForm, players_per_team: Number(e.target.value) })}
+                  className="mt-1 w-full px-2 py-1.5 rounded-lg border text-sm"
+                  style={{ borderColor: "var(--gray-200)", background: "var(--gray-50)", color: "var(--gray-800)" }}
+                >
+                  {[3, 4, 5, 6].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs" style={{ color: "var(--gray-500)" }}>Draft type</span>
+                <select
+                  value={editForm.draft_type}
+                  onChange={(e) => setEditForm({ ...editForm, draft_type: e.target.value })}
+                  className="mt-1 w-full px-2 py-1.5 rounded-lg border text-sm"
+                  style={{ borderColor: "var(--gray-200)", background: "var(--gray-50)", color: "var(--gray-800)" }}
+                >
+                  <option value="snake">Snake</option>
+                  <option value="regular">Regular</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs" style={{ color: "var(--gray-500)" }}>Pick timer</span>
+                <select
+                  value={editForm.timer_seconds}
+                  onChange={(e) => setEditForm({ ...editForm, timer_seconds: Number(e.target.value) })}
+                  className="mt-1 w-full px-2 py-1.5 rounded-lg border text-sm"
+                  style={{ borderColor: "var(--gray-200)", background: "var(--gray-50)", color: "var(--gray-800)" }}
+                >
+                  {[60, 90, 120, 180, 300].map((s) => (
+                    <option key={s} value={s}>{s}s</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs" style={{ color: "var(--gray-500)" }}>Extra picks</span>
+                <select
+                  value={editForm.extras_count}
+                  onChange={(e) => setEditForm({ ...editForm, extras_count: Number(e.target.value) })}
+                  className="mt-1 w-full px-2 py-1.5 rounded-lg border text-sm"
+                  style={{ borderColor: "var(--gray-200)", background: "var(--gray-50)", color: "var(--gray-800)" }}
+                >
+                  {[0, 1, 2, 3].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-end">
+                <p className="text-xs pb-2" style={{ color: "var(--gray-500)" }}>
+                  Total picks:{" "}
+                  <span className="font-medium" style={{ color: "var(--gray-800)" }}>
+                    {editForm.num_teams * (editForm.players_per_team + editForm.extras_count)}
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="flex-1 py-2 rounded-lg text-white text-sm font-semibold"
+                style={{ background: "var(--green)", opacity: saving ? 0.6 : 1 }}
               >
-                {new Date(pool.draft_start_time).toLocaleString("en-US", {
-                  weekday: "short",
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                  timeZoneName: "short",
-                })}
-              </span>
-            </p>
+                {saving ? "Saving..." : "Save"}
+              </button>
+              <button
+                onClick={() => setEditing(false)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium border"
+                style={{ borderColor: "var(--gray-200)", color: "var(--gray-600)", background: "var(--surface)" }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
+        ) : (
+          <>
+            <div
+              className="grid grid-cols-2 gap-2 text-sm"
+              style={{ color: "var(--gray-600)" }}
+            >
+              <p>
+                Teams: <span className="font-medium">{pool.num_teams}</span>
+              </p>
+              <p>
+                Players/team:{" "}
+                <span className="font-medium">{pool.players_per_team}</span>
+              </p>
+              <p>
+                Draft type:{" "}
+                <span className="font-medium">
+                  {pool.draft_type === "snake" ? "Snake" : "Regular"}
+                </span>
+              </p>
+              <p>
+                Pick timer:{" "}
+                <span className="font-medium">{pool.timer_seconds}s</span>
+              </p>
+              <p>
+                Extra picks:{" "}
+                <span className="font-medium">{pool.extras_count}</span>
+              </p>
+              <p>
+                Total picks:{" "}
+                <span className="font-medium">
+                  {pool.num_teams * (pool.players_per_team + pool.extras_count)}
+                </span>
+              </p>
+            </div>
+            {pool.draft_start_time && (
+              <div
+                className="mt-3 pt-3 border-t"
+                style={{ borderColor: "var(--gray-100)" }}
+              >
+                <p className="text-sm" style={{ color: "var(--gray-700)" }}>
+                  Draft starts:{" "}
+                  <span
+                    className="font-semibold"
+                    style={{ color: "var(--green)" }}
+                  >
+                    {new Date(pool.draft_start_time).toLocaleString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                      timeZoneName: "short",
+                    })}
+                  </span>
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
 
