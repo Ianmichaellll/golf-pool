@@ -14,6 +14,8 @@ const PGA_TOUR_API_KEY = "da2-gsrx5bibzbb4njvhl7t37wqyl4";
 
 const ESPN_SEARCH = "https://site.web.api.espn.com/apis/common/v3/search";
 
+export const dynamic = "force-dynamic";
+
 type ESPNCompetitor = {
   id: string;
   order?: number;
@@ -117,7 +119,7 @@ async function fetchOdds(tournamentName: string): Promise<Map<string, string>> {
   try {
     const res = await fetch(BOVADA_GOLF_URL, {
       headers: { "User-Agent": "GolfPool/1.0" },
-      next: { revalidate: 1800 },
+      cache: "no-store",
     });
     if (!res.ok) return oddsMap;
     const data = await res.json();
