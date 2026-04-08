@@ -1155,7 +1155,8 @@ export default function DraftPage() {
                           className="text-[10px]"
                           style={{ color: "var(--gray-400)" }}
                         >
-                          {player.odds || `#${player.rank}`} &middot; {player.country}
+                          {player.odds || (player.worldRank ? `WR #${player.worldRank}` : "")}
+                                {player.odds || player.worldRank ? " \u00b7 " : ""}{player.country}
                         </p>
                       </div>
                     </button>
@@ -1426,7 +1427,8 @@ export default function DraftPage() {
                             </p>
                             {player && (
                               <p className="text-[10px]" style={{ color: "var(--gray-400)" }}>
-                                {player.odds || `#${player.rank}`} &middot; {player.country}
+                                {player.odds || (player.worldRank ? `WR #${player.worldRank}` : "")}
+                                {player.odds || player.worldRank ? " \u00b7 " : ""}{player.country}
                               </p>
                             )}
                           </div>
