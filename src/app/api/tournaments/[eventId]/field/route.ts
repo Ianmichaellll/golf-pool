@@ -133,32 +133,36 @@ async function fetchOdds(tournamentName: string): Promise<Map<string, string>> {
       }
     }
 
-    // Match by: exact name → either name contains the other → shared key words → first event with a Winner market
+    // Helper: does this event have a Winner market?
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function hasWinnerMarket(ev: any): boolean {
+      return ev.displayGroups?.some(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (dg: any) => dg.markets?.some((m: any) => {
+          const d = (m.description || "").toLowerCase();
+          return d === "winner" || d === "outright winner" || d === "winner live";
+        })
+      );
+    }
+
+    // Only consider events that have an actual Winner market (filters out Boosted Specials, 3-Balls, etc.)
+    const eventsWithOdds = allEvents.filter(hasWinnerMarket);
+
+    // Match by: exact name → either contains → shared key words → first event with odds
     const matchedEvent =
-      allEvents.find((ev) => normalizeForMatch(ev.description) === normTournament) ||
-      allEvents.find((ev) => {
+      eventsWithOdds.find((ev) => normalizeForMatch(ev.description) === normTournament) ||
+      eventsWithOdds.find((ev) => {
         const normEv = normalizeForMatch(ev.description);
         return normEv.includes(normTournament) || normTournament.includes(normEv);
       }) ||
-      allEvents.find((ev) => {
+      eventsWithOdds.find((ev) => {
         const normEv = normalizeForMatch(ev.description);
-        // Strip common suffixes like year, "2026", "boosted specials"
         const keyWords = normTournament.split(" ").filter((w: string) => w.length > 3 && !/^\d{4}$/.test(w));
         const evKeyWords = normEv.split(" ").filter((w: string) => w.length > 3 && !/^\d{4}$/.test(w));
-        // Check if key words overlap in either direction
         return (keyWords.length > 0 && keyWords.some((w: string) => normEv.includes(w))) ||
                (evKeyWords.length > 0 && evKeyWords.some((w: string) => normTournament.includes(w)));
       }) ||
-      // Last resort: first event that has a Winner market (skip prop bets like "3-Balls")
-      allEvents.find((ev) =>
-        ev.displayGroups?.some((dg: { markets?: { description?: string }[] }) =>
-          dg.markets?.some((m: { description?: string }) => {
-            const d = (m.description || "").toLowerCase();
-            return d === "winner" || d === "outright winner";
-          })
-        )
-      ) ||
-      allEvents[0];
+      eventsWithOdds[0];
 
     if (!matchedEvent) return oddsMap;
 
