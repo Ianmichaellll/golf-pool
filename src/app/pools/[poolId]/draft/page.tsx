@@ -434,9 +434,14 @@ export default function DraftPage() {
         g.country.toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => {
-      // Sort by odds (favorites first) when available, fall back to ESPN rank
+      // Players without odds go to the bottom
+      const aHasOdds = a.oddsNum < 999999 ? 0 : 1;
+      const bHasOdds = b.oddsNum < 999999 ? 0 : 1;
+      if (aHasOdds !== bHasOdds) return aHasOdds - bHasOdds;
+      // Among players with odds, sort by odds (favorites first)
       if (a.oddsNum !== b.oddsNum) return a.oddsNum - b.oddsNum;
-      return a.rank - b.rank;
+      // Among players without odds, sort by world rank
+      return (a.worldRank || 999) - (b.worldRank || 999);
     });
 
   // ─── Make a pick (manual or auto) ───────────────────────────────────
@@ -954,7 +959,7 @@ export default function DraftPage() {
           className="rounded-xl border overflow-hidden"
           style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
         >
-          <table className="w-full text-xs">
+          <table className="w-full min-w-max text-xs">
             <thead>
               <tr style={{ background: "var(--gray-50)" }}>
                 <th
