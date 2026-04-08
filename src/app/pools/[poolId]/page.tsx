@@ -200,6 +200,18 @@ export default function PoolLobbyPage() {
     setSaving(false);
   }
 
+  async function handleDeletePool() {
+    if (!pool) return;
+    if (
+      !confirm(
+        `Delete "${pool.name}"? This will remove the pool and all members. This cannot be undone.`
+      )
+    )
+      return;
+    await supabase.from("pools").delete().eq("id", poolId);
+    router.replace("/pools");
+  }
+
   async function handleStartDraft() {
     if (!pool || members.length < 2) return;
 
@@ -584,20 +596,33 @@ export default function PoolLobbyPage() {
       {/* Completed pools redirect to standings in useEffect */}
 
       {isAdmin && pool.status === "open" && (
-        <button
-          onClick={handleStartDraft}
-          disabled={!hasEnoughMembers}
-          className="w-full py-3 rounded-lg text-white text-sm font-semibold transition-opacity"
-          style={{
-            background: "var(--green)",
-            opacity: hasEnoughMembers ? 1 : 0.4,
-            cursor: hasEnoughMembers ? "pointer" : "not-allowed",
-          }}
-        >
-          {hasEnoughMembers
-            ? "Randomize Order & Start Draft"
-            : `Need ${2 - members.length} more member${2 - members.length !== 1 ? "s" : ""} to start`}
-        </button>
+        <div className="space-y-3">
+          <button
+            onClick={handleStartDraft}
+            disabled={!hasEnoughMembers}
+            className="w-full py-3 rounded-lg text-white text-sm font-semibold transition-opacity"
+            style={{
+              background: "var(--green)",
+              opacity: hasEnoughMembers ? 1 : 0.4,
+              cursor: hasEnoughMembers ? "pointer" : "not-allowed",
+            }}
+          >
+            {hasEnoughMembers
+              ? "Randomize Order & Start Draft"
+              : `Need ${2 - members.length} more member${2 - members.length !== 1 ? "s" : ""} to start`}
+          </button>
+          <button
+            onClick={handleDeletePool}
+            className="w-full py-2.5 rounded-lg text-sm font-medium border"
+            style={{
+              borderColor: "var(--gray-200)",
+              color: "#ef4444",
+              background: "var(--surface)",
+            }}
+          >
+            Delete Pool
+          </button>
+        </div>
       )}
 
       {!isAdmin && pool.status === "open" && (

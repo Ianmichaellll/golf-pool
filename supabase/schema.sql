@@ -74,6 +74,9 @@ create policy "Admin can update pool"
 create policy "Authenticated users can create pools"
   on public.pools for insert with check (auth.uid() is not null);
 
+create policy "Admin can delete pool"
+  on public.pools for delete using (admin_id = auth.uid());
+
 -- ══════════════════════════════════════════════════════════════
 -- 3. POOL MEMBERS
 -- ══════════════════════════════════════════════════════════════
