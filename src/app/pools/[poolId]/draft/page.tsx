@@ -954,9 +954,9 @@ export default function DraftPage() {
       )}
 
       {/* Draft Board (hidden on Teams tab) */}
-      {sideTab !== "teams" && <div className="mb-4 overflow-x-auto">
+      {sideTab !== "teams" && <div className="mb-4 overflow-x-auto -mx-4 px-4" style={{ WebkitOverflowScrolling: "touch" }}>
         <div
-          className="rounded-xl border overflow-hidden"
+          className="rounded-xl border"
           style={{ borderColor: "var(--gray-200)", background: "var(--surface)" }}
         >
           <table className="w-full min-w-max text-xs">
