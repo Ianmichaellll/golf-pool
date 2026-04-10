@@ -685,17 +685,19 @@ function LeaderboardRow({ entry }: { entry: LeaderboardEntry }) {
   const isMcWd = entry.position === "MC" || entry.position === "WD";
   const hasData = entry.espnId && entry.espnId > 0;
   const thruDisplay =
-    entry.thru !== "--" && entry.thru !== "F"
-      ? `(${entry.thru})`
-      : entry.thru === "F"
-        ? "(F)"
-        : "";
+    entry.thru === "MC" || entry.thru === "WD"
+      ? "(-)"
+      : entry.thru !== "--" && entry.thru !== "F"
+        ? `(${entry.thru})`
+        : entry.thru === "F"
+          ? "(F)"
+          : "";
 
   return (
     <div>
       <button
         onClick={() => hasData && setExpanded(!expanded)}
-        className={`w-full grid grid-cols-12 px-3 sm:px-5 py-2 items-center border-t ${isMcWd ? "opacity-50" : ""} ${hasData ? "cursor-pointer" : "cursor-default"}`}
+        className={`w-full grid grid-cols-12 px-3 sm:px-5 py-2 items-center border-t ${hasData ? "cursor-pointer" : "cursor-default"}`}
         style={{ borderColor: "var(--gray-50)", background: "var(--surface)" }}
       >
         <div
