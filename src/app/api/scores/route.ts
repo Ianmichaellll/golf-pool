@@ -124,13 +124,19 @@ function getTodayScore(competitor: ESPNCompetitor, tournamentRound: number): str
   return round.displayValue || "--";
 }
 
-function isMissedCut(competitor: ESPNCompetitor): boolean {
-  // ESPN marks MC players with status or by having only 2 rounds
-  // and being sorted to the bottom with no more rounds to play
+function isMissedCut(competitor: ESPNCompetitor, currentRound: number = 1): boolean {
   const statusDesc = competitor.status?.type?.description?.toLowerCase() || "";
   if (statusDesc.includes("cut") || statusDesc === "mc") return true;
-  // Also check if score field contains "CUT" or similar
   if (competitor.score === "CUT" || competitor.score === "MC") return true;
+  // If tournament is past round 2, players with no data for current round missed the cut
+  if (currentRound > 2) {
+    const roundData = competitor.linescores?.find((r: { period: number }) => r.period === currentRound);
+    if (!roundData || (roundData.value === 0 && !roundData.linescores?.length)) {
+      const r1 = competitor.linescores?.find((r: { period: number }) => r.period === 1);
+      const r2 = competitor.linescores?.find((r: { period: number }) => r.period === 2);
+      if (r1 && r1.value > 0 && r2 && r2.value > 0) return true;
+    }
+  }
   return false;
 }
 
@@ -141,7 +147,8 @@ function isWithdrawn(competitor: ESPNCompetitor): boolean {
 }
 
 function computePosition(
-  competitors: ESPNCompetitor[]
+  competitors: ESPNCompetitor[],
+  currentRound: number = 1
 ): Map<string, string> {
   const positions = new Map<string, string>();
 
@@ -150,7 +157,7 @@ function computePosition(
   const inactive: ESPNCompetitor[] = [];
 
   for (const c of competitors) {
-    if (isMissedCut(c)) {
+    if (isMissedCut(c, currentRound)) {
       positions.set(c.athlete.displayName.toLowerCase(), "MC");
     } else if (isWithdrawn(c)) {
       positions.set(c.athlete.displayName.toLowerCase(), "WD");
@@ -218,8 +225,8 @@ export async function GET() {
 
     const competition = event.competitions[0];
     const competitors = competition.competitors || [];
-    const positionMap = computePosition(competitors);
     const currentRound = getTournamentRound(competitors);
+    const positionMap = computePosition(competitors, currentRound);
 
     // Build player score map
     const playerScores: Record<

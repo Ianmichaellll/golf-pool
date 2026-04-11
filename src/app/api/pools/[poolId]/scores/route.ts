@@ -70,9 +70,20 @@ function getTodayScore(competitor: ESPNCompetitor, tournamentRound: number): str
   return round.displayValue || "--";
 }
 
-function isMissedCut(c: ESPNCompetitor): boolean {
+function isMissedCut(c: ESPNCompetitor, currentRound: number = 1): boolean {
   const s = c.status?.type?.description?.toLowerCase() || "";
-  return s.includes("cut") || s === "mc" || c.score === "CUT" || c.score === "MC";
+  if (s.includes("cut") || s === "mc" || c.score === "CUT" || c.score === "MC") return true;
+  // If tournament is past round 2, players with no data for the current round missed the cut
+  if (currentRound > 2) {
+    const roundData = c.linescores?.find((r) => r.period === currentRound);
+    if (!roundData || (roundData.value === 0 && !roundData.linescores?.length)) {
+      // Confirm they played rounds 1 & 2 (not a WD)
+      const r1 = c.linescores?.find((r) => r.period === 1);
+      const r2 = c.linescores?.find((r) => r.period === 2);
+      if (r1 && r1.value > 0 && r2 && r2.value > 0) return true;
+    }
+  }
+  return false;
 }
 
 function isWithdrawn(c: ESPNCompetitor): boolean {
@@ -127,13 +138,13 @@ function buildScorecard(c: ESPNCompetitor): { round: number; score: string; hole
     }));
 }
 
-function computePositions(competitors: ESPNCompetitor[]): Map<string, string> {
+function computePositions(competitors: ESPNCompetitor[], currentRound: number = 1): Map<string, string> {
   const positions = new Map<string, string>();
   const active: ESPNCompetitor[] = [];
 
   for (const c of competitors) {
     const key = c.athlete.displayName.toLowerCase();
-    if (isMissedCut(c)) {
+    if (isMissedCut(c, currentRound)) {
       positions.set(key, "MC");
     } else if (isWithdrawn(c)) {
       positions.set(key, "WD");
@@ -276,7 +287,7 @@ export async function GET(
 
   // Build position map — only if tournament has started
   const positionMap = tournamentStarted
-    ? computePositions(competitors)
+    ? computePositions(competitors, currentRound)
     : new Map<string, string>();
 
   // Match ESPN names to pool player names
