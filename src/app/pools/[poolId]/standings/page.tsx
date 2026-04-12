@@ -542,7 +542,7 @@ function TeamCard({
         <div className="flex items-center gap-3">
           <div className="text-right">
             <div className="text-2xl font-bold tabular-nums" style={{ color: "var(--gray-900)" }}>
-              {team.totalScore > 0 ? "+" : ""}{team.totalScore}
+              {team.totalScore === 0 ? "E" : team.totalScore > 0 ? `+${team.totalScore}` : team.totalScore}
             </div>
             <div className="text-xs tabular-nums" style={{ color: "var(--gray-400)" }}>
               Pos: {team.positionSum}
