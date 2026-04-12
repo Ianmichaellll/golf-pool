@@ -128,13 +128,13 @@ function isMissedCut(competitor: ESPNCompetitor, currentRound: number = 1): bool
   const statusDesc = competitor.status?.type?.description?.toLowerCase() || "";
   if (statusDesc.includes("cut") || statusDesc === "mc") return true;
   if (competitor.score === "CUT" || competitor.score === "MC") return true;
-  // If tournament is past round 2, players with no data for current round missed the cut
-  if (currentRound > 2) {
-    const roundData = competitor.linescores?.find((r: { period: number }) => r.period === currentRound);
-    if (!roundData || (roundData.value === 0 && !roundData.linescores?.length)) {
-      const r1 = competitor.linescores?.find((r: { period: number }) => r.period === 1);
-      const r2 = competitor.linescores?.find((r: { period: number }) => r.period === 2);
-      if (r1 && r1.value > 0 && r2 && r2.value > 0) return true;
+  // MC players only have linescores up to round 3 (with value=0), not round 4
+  // Active players always have a linescore entry for the current round
+  if (currentRound > 2 && competitor.linescores?.length) {
+    const maxPeriod = Math.max(...competitor.linescores.map((r: { period: number }) => r.period));
+    if (maxPeriod < currentRound) {
+      const completedRounds = competitor.linescores.filter((r: { value: number }) => r.value > 0).length;
+      if (completedRounds === 2) return true;
     }
   }
   return false;

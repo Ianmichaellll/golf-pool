@@ -73,14 +73,13 @@ function getTodayScore(competitor: ESPNCompetitor, tournamentRound: number): str
 function isMissedCut(c: ESPNCompetitor, currentRound: number = 1): boolean {
   const s = c.status?.type?.description?.toLowerCase() || "";
   if (s.includes("cut") || s === "mc" || c.score === "CUT" || c.score === "MC") return true;
-  // If tournament is past round 2, players with no data for the current round missed the cut
-  if (currentRound > 2) {
-    const roundData = c.linescores?.find((r) => r.period === currentRound);
-    if (!roundData || (roundData.value === 0 && !roundData.linescores?.length)) {
-      // Confirm they played rounds 1 & 2 (not a WD)
-      const r1 = c.linescores?.find((r) => r.period === 1);
-      const r2 = c.linescores?.find((r) => r.period === 2);
-      if (r1 && r1.value > 0 && r2 && r2.value > 0) return true;
+  // MC players only have linescores up to round 3 (with value=0), not round 4
+  // Active players always have a linescore entry for the current round
+  if (currentRound > 2 && c.linescores?.length) {
+    const maxPeriod = Math.max(...c.linescores.map((r) => r.period));
+    if (maxPeriod < currentRound) {
+      const completedRounds = c.linescores.filter((r) => r.value > 0).length;
+      if (completedRounds === 2) return true;
     }
   }
   return false;
