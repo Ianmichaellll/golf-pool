@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 
@@ -112,10 +113,19 @@ function LoginForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1"
-              style={{ color: "var(--gray-700)" }}>
-              Password
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium"
+                style={{ color: "var(--gray-700)" }}>
+                Password
+              </label>
+              {!isSignUp && (
+                <Link href="/forgot-password"
+                  className="text-xs underline"
+                  style={{ color: "var(--green)" }}>
+                  Forgot password?
+                </Link>
+              )}
+            </div>
             <input
               type="password"
               value={password}
