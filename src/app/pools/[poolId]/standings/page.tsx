@@ -821,9 +821,36 @@ export default function PoolStandingsPage() {
       )
     )
       return;
-    await supabase.from("pools").delete().eq("id", poolId);
+    const { error } = await supabase.from("pools").delete().eq("id", poolId);
+    if (error) {
+      alert(`Delete failed: ${error.message}`);
+      return;
+    }
     router.replace("/pools");
   }
+
+  // Self-heal stuck "drafting" status: if the pool says drafting but the
+  // draft is actually completed (e.g. tab closed mid-finalize), bump it.
+  useEffect(() => {
+    if (poolStatus !== "drafting" || !isAdmin) return;
+    let cancelled = false;
+    (async () => {
+      const { data: draft } = await supabase
+        .from("drafts")
+        .select("status")
+        .eq("pool_id", poolId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (draft?.status === "completed") {
+        await supabase
+          .from("pools")
+          .update({ status: "active" })
+          .eq("id", poolId);
+        setPoolStatus("active");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [poolStatus, isAdmin, poolId, supabase]);
 
   // Check if user is admin and get pool status
   useEffect(() => {

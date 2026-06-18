@@ -222,7 +222,11 @@ export default function PoolLobbyPage() {
       )
     )
       return;
-    await supabase.from("pools").delete().eq("id", poolId);
+    const { error } = await supabase.from("pools").delete().eq("id", poolId);
+    if (error) {
+      alert(`Delete failed: ${error.message}`);
+      return;
+    }
     router.replace("/pools");
   }
 
