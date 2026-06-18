@@ -270,7 +270,10 @@ export async function GET(
       const espnUrl = `${ESPN_URL}?event=${pool.espn_event_id}`;
       const res = await fetch(espnUrl, {
         headers: { "User-Agent": "EasyPool/1.0" },
-        next: { revalidate: 120 },
+        // 30s cache: ESPN updates leaderboard roughly every 60-90s during live
+        // play, so 30s keeps us close to fresh without hammering them. Combine
+        // with 60s client poll = worst-case ~90s behind ESPN.
+        next: { revalidate: 30 },
       });
       if (res.ok) {
         const data = await res.json();

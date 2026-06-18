@@ -892,9 +892,14 @@ export default function PoolStandingsPage() {
     loadHistory();
   }, [poolId]);
 
-  const fetchScores = useCallback(async () => {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchScores = useCallback(async (manual = false) => {
+    if (manual) setRefreshing(true);
     try {
-      const res = await fetch(`/api/pools/${poolId}/scores`);
+      const res = await fetch(`/api/pools/${poolId}/scores`, {
+        cache: manual ? "no-store" : "default",
+      });
       if (!res.ok) throw new Error("API error");
       const json: APIResponse = await res.json();
       setData(json);
@@ -902,14 +907,32 @@ export default function PoolStandingsPage() {
       console.error("Failed to fetch pool scores:", err);
     } finally {
       setLoading(false);
+      if (manual) setRefreshing(false);
     }
   }, [poolId]);
 
-  // Auto-refresh only for live (non-archived) pools
+  // Auto-refresh only for live (non-archived) pools.
+  // Poll every 60s while the tab is visible (paired with 30s ESPN cache =
+  // worst-case ~90s stale). Modern browsers throttle background tabs so this
+  // is fine for cost; visibilitychange below brings instant refresh on return.
   useEffect(() => {
-    if (history) return; // archived — no polling
-    const interval = setInterval(fetchScores, 5 * 60 * 1000);
+    if (history) return;
+    const interval = setInterval(() => fetchScores(false), 60 * 1000);
     return () => clearInterval(interval);
+  }, [fetchScores, history]);
+
+  // Refresh immediately when the tab regains focus / becomes visible.
+  useEffect(() => {
+    if (history) return;
+    function onVisible() {
+      if (document.visibilityState === "visible") fetchScores(false);
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, [fetchScores, history]);
 
   async function handleFinalize() {
@@ -1164,8 +1187,41 @@ export default function PoolStandingsPage() {
         </div>
 
         {data.updatedAt && (
-          <div className="text-xs mt-2" style={{ color: "var(--gray-400)" }}>
-            Updated {new Date(data.updatedAt).toLocaleTimeString()}
+          <div className="text-xs mt-2 inline-flex items-center gap-2"
+            style={{ color: "var(--gray-400)" }}>
+            <span>Updated {new Date(data.updatedAt).toLocaleTimeString()}</span>
+            <button
+              type="button"
+              onClick={() => fetchScores(true)}
+              disabled={refreshing}
+              aria-label="Refresh scores"
+              className="inline-flex items-center justify-center w-5 h-5 rounded transition-opacity"
+              style={{
+                color: "var(--gray-500)",
+                opacity: refreshing ? 0.4 : 1,
+              }}
+            >
+              {/* Circular arrow — spins while refreshing */}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  animation: refreshing ? "spin 0.8s linear infinite" : "none",
+                }}
+                aria-hidden="true"
+              >
+                <polyline points="23 4 23 10 17 10" />
+                <polyline points="1 20 1 14 7 14" />
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+              </svg>
+            </button>
+            <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
           </div>
         )}
       </div>
