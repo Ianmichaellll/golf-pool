@@ -90,6 +90,25 @@ function isWithdrawn(c: ESPNCompetitor): boolean {
   return s === "wd" || s === "withdrawn" || c.score === "WD";
 }
 
+// MC penalty: once the weekend begins, add +5 strokes per weekend round
+// the cut player would have "missed." So MC players carry their actual
+// 2-round score during Friday, +5 during Saturday's round, +10 from Sunday
+// onward. Keeps live standings honest as the weekend unfolds.
+const MC_WEEKEND_PENALTY_PER_ROUND = 5;
+
+function applyMcPenalty(baseScore: string, currentRound: number): string {
+  if (baseScore === "--" || baseScore === "") return baseScore;
+  const baseNum = parseInt(baseScore.replace("E", "0"));
+  if (isNaN(baseNum)) return baseScore;
+  // currentRound 1 or 2 (Thu/Fri) → 0 penalty
+  // currentRound 3 (Sat) → +5
+  // currentRound 4 (Sun) → +10
+  const weekendRoundsBegun = Math.max(0, Math.min(currentRound, 4) - 2);
+  const total = baseNum + weekendRoundsBegun * MC_WEEKEND_PENALTY_PER_ROUND;
+  if (total === 0) return "E";
+  return total > 0 ? `+${total}` : String(total);
+}
+
 // Get a MC/WD player's actual score from their completed rounds
 function getActualScore(c: ESPNCompetitor): string {
   // ESPN sometimes keeps the numeric score even for MC players
@@ -331,7 +350,11 @@ export async function GET(
 
       let score = "--";
       if (tournamentStarted) {
-        if (mc || wd) {
+        if (mc) {
+          // MC players: actual 2-round score + weekend penalty (+5 per round
+          // they would have played but didn't). Drives both display and team total.
+          score = applyMcPenalty(getActualScore(espn), currentRound);
+        } else if (wd) {
           score = getActualScore(espn);
         } else {
           score = espn.score || "E";
