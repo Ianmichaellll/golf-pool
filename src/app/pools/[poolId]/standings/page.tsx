@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "../../../lib/supabase/client";
 
@@ -799,6 +799,31 @@ export default function PoolStandingsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [poolStatus, setPoolStatus] = useState<string>("");
   const [finalizing, setFinalizing] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  // Close settings dropdown on outside click
+  useEffect(() => {
+    if (!showSettings) return;
+    function onDocClick(e: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setShowSettings(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [showSettings]);
+
+  async function handleDeletePool() {
+    if (
+      !confirm(
+        "Delete this pool? This will remove the pool and all draft picks, history, and scores. This cannot be undone."
+      )
+    )
+      return;
+    await supabase.from("pools").delete().eq("id", poolId);
+    router.replace("/pools");
+  }
 
   // Check if user is admin and get pool status
   useEffect(() => {
@@ -1028,7 +1053,50 @@ export default function PoolStandingsPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-8 relative">
+        {/* Admin gear menu — upper-left */}
+        {isAdmin && (
+          <div className="absolute left-0 top-0 text-left" ref={settingsRef}>
+            <button
+              type="button"
+              onClick={() => setShowSettings((s) => !s)}
+              aria-label="Pool settings"
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+              style={{
+                background: showSettings ? "var(--gray-100)" : "transparent",
+                color: "var(--gray-500)",
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+            {showSettings && (
+              <div
+                className="absolute left-0 mt-1 z-10 rounded-lg border shadow-md min-w-[160px] py-1"
+                style={{
+                  background: "var(--surface)",
+                  borderColor: "var(--gray-200)",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSettings(false);
+                    handleDeletePool();
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm font-medium"
+                  style={{ color: "#ef4444" }}
+                >
+                  Delete Pool
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         <button
           onClick={() => router.push("/pools")}
           className="text-sm mb-3 inline-block"
