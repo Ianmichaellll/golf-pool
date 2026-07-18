@@ -14,7 +14,24 @@ type Pool = {
   invite_code: string;
   member_count: number;
   is_admin: boolean;
+  created_at: string;
 };
+
+// A pool counts as "past" once it's finalized (status completed), OR its draft
+// already ran (drafting/active) and it was created long enough ago that the
+// tournament has certainly finished. Without this, old pools that were never
+// manually finalized linger in the live section forever.
+const TOURNAMENT_OVER_DAYS = 7;
+function isEffectivelyPast(pool: Pool): boolean {
+  if (pool.status === "completed") return true;
+  if (pool.status === "drafting" || pool.status === "active") {
+    if (!pool.created_at) return false;
+    const daysOld =
+      (Date.now() - new Date(pool.created_at).getTime()) / 86_400_000;
+    return daysOld > TOURNAMENT_OVER_DAYS;
+  }
+  return false;
+}
 
 export default function PoolsPage() {
   const [pools, setPools] = useState<Pool[]>([]);
@@ -110,10 +127,10 @@ export default function PoolsPage() {
       ) : (
         <>
           {/* Active Pools */}
-          {pools.filter((p) => p.status !== "completed").length > 0 && (
+          {pools.filter((p) => !isEffectivelyPast(p)).length > 0 && (
             <div className="space-y-3 mb-8">
               {pools
-                .filter((p) => p.status !== "completed")
+                .filter((p) => !isEffectivelyPast(p))
                 .map((pool) => {
                   const status = statusLabel[pool.status] || statusLabel.open;
                   return (
@@ -155,7 +172,7 @@ export default function PoolsPage() {
           )}
 
           {/* Past Pools */}
-          {pools.filter((p) => p.status === "completed").length > 0 && (
+          {pools.filter((p) => isEffectivelyPast(p)).length > 0 && (
             <>
               <h2
                 className="text-sm font-semibold mb-3"
@@ -165,9 +182,11 @@ export default function PoolsPage() {
               </h2>
               <div className="space-y-3">
                 {pools
-                  .filter((p) => p.status === "completed")
+                  .filter((p) => isEffectivelyPast(p))
                   .map((pool) => {
-                    const status = statusLabel[pool.status] || statusLabel.open;
+                    // Past section: always show "Completed", even for pools that
+                    // ended without being finalized (status still active/drafting).
+                    const status = statusLabel.completed;
                     return (
                       <button
                         key={pool.id}
