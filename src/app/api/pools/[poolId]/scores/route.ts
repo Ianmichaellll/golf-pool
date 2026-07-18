@@ -90,21 +90,20 @@ function isWithdrawn(c: ESPNCompetitor): boolean {
   return s === "wd" || s === "withdrawn" || c.score === "WD";
 }
 
-// MC penalty: once the weekend begins, add +5 strokes per weekend round
-// the cut player would have "missed." So MC players carry their actual
-// 2-round score during Friday, +5 during Saturday's round, +10 from Sunday
-// onward. Keeps live standings honest as the weekend unfolds.
-const MC_WEEKEND_PENALTY_PER_ROUND = 5;
+// MC penalty: once the weekend begins, add a FLAT +2 strokes for the cut
+// player — the same +2 on Saturday and Sunday (it does NOT escalate). MC
+// players carry their actual 2-round score during Friday, then +2 for the
+// whole weekend. Keeps live standings honest without over-penalizing.
+const MC_WEEKEND_PENALTY = 2;
 
 function applyMcPenalty(baseScore: string, currentRound: number): string {
   if (baseScore === "--" || baseScore === "") return baseScore;
   const baseNum = parseInt(baseScore.replace("E", "0"));
   if (isNaN(baseNum)) return baseScore;
   // currentRound 1 or 2 (Thu/Fri) → 0 penalty
-  // currentRound 3 (Sat) → +5
-  // currentRound 4 (Sun) → +10
-  const weekendRoundsBegun = Math.max(0, Math.min(currentRound, 4) - 2);
-  const total = baseNum + weekendRoundsBegun * MC_WEEKEND_PENALTY_PER_ROUND;
+  // currentRound 3 (Sat) or 4 (Sun) → flat +2 (same both days, no escalation)
+  const penalty = currentRound >= 3 ? MC_WEEKEND_PENALTY : 0;
+  const total = baseNum + penalty;
   if (total === 0) return "E";
   return total > 0 ? `+${total}` : String(total);
 }
@@ -277,13 +276,25 @@ export async function GET(
       });
       if (res.ok) {
         const data = await res.json();
-        const event: ESPNEvent | undefined = data.events?.[0];
-        // Verify ESPN returned the correct event (it ignores future event IDs)
-        const returnedId = event?.id;
-        const isCorrectEvent = returnedId
-          ? String(returnedId) === String(pool.espn_event_id)
-          : true; // if no id field, trust it
-        if (isCorrectEvent && event?.competitions?.[0]) {
+        // ESPN returns ALL concurrently-running events in one response (e.g. The Open
+        // and a same-week US event), and does NOT reliably put the requested one first
+        // — the ?event= param is best-effort. Trusting events[0] means that whenever
+        // ESPN floats the *other* tournament to the front, isCorrectEvent fails and the
+        // standings blank out ("not updating"). This bites overseas majors especially,
+        // since their rounds finish while the US event is still live. So: find OUR event
+        // by id among ALL returned events, with a tournament-name fallback for a stale id.
+        const events: ESPNEvent[] = data.events || [];
+        let event = events.find(
+          (e) => String(e.id) === String(pool.espn_event_id)
+        );
+        if (!event) {
+          event = events.find(
+            (e) =>
+              normalizeForMatch(e.name || e.shortName || "") ===
+              normalizeForMatch(pool.tournament)
+          );
+        }
+        if (event?.competitions?.[0]) {
           competitors = event.competitions[0].competitors || [];
           eventName = event.name || event.shortName || pool.tournament;
           eventStatus =
@@ -291,8 +302,8 @@ export async function GET(
             event.competitions[0].status?.type?.description ||
             "In Progress";
           currentRound = getTournamentRound(competitors);
-        } else if (!isCorrectEvent) {
-          // ESPN returned a different event — tournament hasn't started on ESPN yet
+        } else {
+          // Our event isn't in ESPN's response at all — hasn't started on ESPN yet
           eventStatus = "Scheduled";
         }
       }
