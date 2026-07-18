@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../lib/supabase/server";
 
+// Live scoring must never be cached: this route is per-user (auth-gated) and
+// reflects a fast-moving leaderboard. A cached snapshot is exactly what made
+// standings "freeze" on an old round. Force fresh execution every request.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const ESPN_URL =
   "https://site.api.espn.com/apis/site/v2/sports/golf/pga/scoreboard";
 
@@ -257,10 +263,10 @@ export async function GET(
       const espnUrl = `${ESPN_URL}?event=${pool.espn_event_id}`;
       const res = await fetch(espnUrl, {
         headers: { "User-Agent": "EasyPool/1.0" },
-        // 30s cache: ESPN updates leaderboard roughly every 60-90s during live
-        // play, so 30s keeps us close to fresh without hammering them. Combine
-        // with 60s client poll = worst-case ~90s behind ESPN.
-        next: { revalidate: 30 },
+        // Never cache during live play. The client polls ~60s, so a stale ESPN
+        // snapshot here is the main "not updating" risk; no-store guarantees
+        // every standings load reflects the live leaderboard.
+        cache: "no-store",
       });
       if (res.ok) {
         const data = await res.json();
@@ -510,6 +516,6 @@ export async function GET(
       leaderboard,
       updatedAt: new Date().toISOString(),
     },
-    { headers: { "Cache-Control": "public, max-age=120" } }
+    { headers: { "Cache-Control": "no-store" } }
   );
 }
